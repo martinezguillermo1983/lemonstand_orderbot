@@ -147,6 +147,7 @@ class ClientsLink < ActiveRecord::Base
         lemonStandShippingMethod = lemonStandShipment["shipping_method"]["data"]
         lemonStandShippingAddress =  lemonStandShipment["shipping_address"]["data"]
         lemonStandItems = lemonStandOrder["items"]["data"]
+        lemonStandPayments = lemonStandInvoice["payments"]["data"]
         # Map customer ids
         orderBotAccountId = self.mapCustomerId(lemonStandCustomer["id"])
         if orderBotAccountId.nil?
@@ -186,11 +187,11 @@ class ClientsLink < ActiveRecord::Base
             order_discount: lemonStandOrder["shipping_quote"].to_f, 
             order_total: lemonStandOrder["total"].to_f,
             shipping_tax: [ # TODO Review
-            {
-                tax_name: "GST", 
-                tax_rate: lemonStandOrder["total_shipping_tax"].to_f / lemonStandOrder["total_shipping_quote"].to_f,
-                amount: lemonStandOrder["total_shipping_tax"].to_f
-            }
+                {
+                    tax_name: "GST", 
+                    tax_rate: lemonStandOrder["total_shipping_tax"].to_f / lemonStandOrder["total_shipping_quote"].to_f,
+                    amount: lemonStandOrder["total_shipping_tax"].to_f
+                }
             ],
             shipping_address: {
                 store_name: "",
@@ -218,23 +219,8 @@ class ClientsLink < ActiveRecord::Base
                 phone_number: lemonStandBillingAddress["phone"],
                 email: lemonStandCustomer["email"]
             },
-            payments: [
-                {
-                    payment_type: "visa", # @TODO ask them to expose the payment type
-                    payment_date: DateTime.parse(lemonStandOrder["invoices"]["data"].first["payments"]["data"].first["processed_at"]).strftime("%Y-%m-%d"),
-                    amount_paid: lemonStandOrder["invoices"]["data"].first["payments"]["data"].first["amount"].to_f,
-                    check_no: nil,
-                    notes: nil,
-                    credit_card_info: {
-                    #     "transaction_id": "2239012792",
-                    #     "authorization_code": "YT0VX3",
-                    #     "last_four_digits": "0002",
-                    #     "gateway_customer_profile_id": "36724516",
-                    #     "gateway_customer_payment_profile_id": "33204462",
-                    #     "pay_by_cim": true
-                    }
-                }
-            ],
+            payments: [],
+            order_lines: [],
             # "other_charges": [
             #     {
             #         "other_charge_id": 60,
@@ -249,6 +235,27 @@ class ClientsLink < ActiveRecord::Base
             #     }
             # ]
         }
+        # Payments array
+        payments = [];
+        lemonStandPayments.each do |payment|
+            payments.push({
+                payment_type: "visa", # @TODO ask them to expose the payment type
+                payment_date: DateTime.parse(payment["processed_at"]).strftime("%Y-%m-%d"),
+                amount_paid: payment["amount"].to_f,
+                check_no: nil,
+                notes: nil,
+                credit_card_info: {
+                #     "transaction_id": "2239012792",
+                #     "authorization_code": "YT0VX3",
+                #     "last_four_digits": "0002",
+                #     "gateway_customer_profile_id": "36724516",
+                #     "gateway_customer_payment_profile_id": "33204462",
+                #     "pay_by_cim": true
+                }
+            })
+        end
+        orderBotOrder[:payments] = payments
+        # Order lines array
         orderLines = [];
         lineNumber = 1;
         lemonStandItems.each do |item|
