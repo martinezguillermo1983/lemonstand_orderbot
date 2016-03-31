@@ -14,9 +14,12 @@ Rails.application.routes.draw do
   # Example resource route (maps HTTP verbs to controller actions automatically):
     # resources :test
 
-    post 'sync/order/:client_code'     => 'order#sync'
-    post 'sync/customer/:client_code'  => 'customer#sync'
-    post 'sync/product/:client_code'  => 'product#sync'
+    get 'api/productclasses'  => 'product#getProductClasses'
+    get 'api/productclasses/:product_class_id/categories'  => 'product#getProductCategoriesByProductClass'
+
+    post 'sync/sync/order/:client_code'     => 'order#sync'
+    post 'sync/sync/customer/:client_code'  => 'customer#sync'
+    post 'sync/sync/product/:client_code'  => 'product#sync'
 
     get "/404" => "errors#not_found"
     get "/500" => "errors#exception"
