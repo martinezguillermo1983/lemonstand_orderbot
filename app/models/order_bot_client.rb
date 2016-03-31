@@ -15,7 +15,7 @@ class OrderBotClient < ActiveRecord::Base
         if !params.empty?
             fullUrl += "?" + params.to_query
         end
-        self.class.get(
+        response = self.class.get(
             fullUrl, 
             :basic_auth => basicAuth
         )
@@ -23,12 +23,30 @@ class OrderBotClient < ActiveRecord::Base
 
     def httpPost(uri, body)
         fullUrl = self.url+ "/admin/" + uri;
-        self.class.post(
+        response = self.class.post(
             fullUrl, 
             :body => [body].to_json,
             :headers => { 'Content-Type' => 'application/json', 'Accept' => 'application/json' },
             :basic_auth => basicAuth
         )
+        if response["response_code"] != 1
+            response = false
+        end
+        response
+    end
+
+    def httpPut(uri, body)
+        fullUrl = self.url+ "/admin/" + uri;
+        response = self.class.put(
+            fullUrl, 
+            :body => body.to_json,
+            :headers => { 'Content-Type' => 'application/json', 'Accept' => 'application/json' },
+            :basic_auth => basicAuth
+        )
+        if response["response_code"] != 1
+            response = false
+        end
+        response
     end
 
     def self.getByClientCode(client_code)
@@ -49,10 +67,22 @@ class OrderBotClient < ActiveRecord::Base
         httpPost("Customers.json/", customer)
     end 
 
+    def putCustomer(customer_id, customer)
+        httpPut("Customers.json/"+customer_id.to_s+"/", customer)
+    end 
+
     # Orders
 
     def postOrder(order)
         httpPost("Orders.json/", order)
+    end 
+
+    def putOrder(order_id, order)
+        httpPut("Orders.json/"+order_id.to_s+"/", order)
+    end 
+
+    def getOrder(order_id, params={})
+        httpGet("Orders.json/"+order_id.to_s+"/", params)
     end 
 
     # Products
@@ -97,6 +127,10 @@ class OrderBotClient < ActiveRecord::Base
 
     def getAccountGroups
         httpGet("account_groups.json/")
+    end
+
+    def getWebsites
+        httpGet("websites.json/")
     end
 
     # Syncing
@@ -168,7 +202,7 @@ class OrderBotClient < ActiveRecord::Base
                     # Get or push category
                     lemonStandCategory = nil
                     lemonStandCategories.each do |category|
-                        if orderBotCategory["category_name"] == category["api_code"] and category["shop_category_id"].nil?
+                        if "category-"+orderBotCategory["category_name"] == category["api_code"] #and category["shop_category_id"].nil?
                             lemonStandCategory = category
                             break
                         end
@@ -178,20 +212,22 @@ class OrderBotClient < ActiveRecord::Base
                             name: orderBotCategory["category_name"],
                             url_name: orderBotCategory["category_name"].to_s.downcase.tr(" ", "-").gsub(/[^0-9A-Za-z]/, ''),
                             title: orderBotCategory["category_name"],
-                            api_code: orderBotCategory["category_name"],
+                            api_code: "category-"+orderBotCategory["category_name"],
                             is_visible: 1    
                         }
                         lemonStandCategory = lemonStandClient.postCategory(category)
                         if !lemonStandCategory
                             return {data: {message: "Error creating LemonStand category "+orderBotCategory["category_name"].to_s}, status: 400}
                         end
+                    else
+
                     end
                     categoriesList[clientIndex][:product_types][productClassIndex][:categories].push(lemonStandCategory)                    
                     # Push groups (subcategories)
                     orderBotCategory["groups"].each do |orderBotGroup|
                         lemonStandSubCategory = nil
                         lemonStandCategories.each do |category|
-                            if orderBotGroup["group_name"] == category["api_code"] and category["shop_category_id"] == lemonStandCategory["id"]
+                            if "category-"+orderBotCategory["category_name"]+"-group-"+orderBotGroup["group_name"] == category["api_code"] and category["shop_category_id"] == lemonStandCategory["id"]
                                 lemonStandSubCategory = category
                             end
                         end
@@ -201,7 +237,7 @@ class OrderBotClient < ActiveRecord::Base
                                 url_name: lemonStandCategory["url_name"].to_s+"-"+orderBotGroup["group_name"].to_s.downcase.tr(" ", "-").gsub(/[^0-9A-Za-z]/, ''),
                                 title: orderBotGroup["group_name"],
                                 is_visible: 1,
-                                api_code: orderBotGroup["group_name"],
+                                api_code: "category-"+orderBotCategory["category_name"]+"-group-"+orderBotGroup["group_name"],
                                 parent: lemonStandCategory["id"]     
                             }
                             lemonStandSubCategory = lemonStandClient.postCategory(category)
@@ -217,23 +253,23 @@ class OrderBotClient < ActiveRecord::Base
         return {data: categoriesList, status: 200}
     end
 
-    def pushProductsByTypeAndCategory(product_type_id, category_name)
+    def pushProductsByTypeAndCategory(product_class_name, category_name)
         # Check if Gentlefawn is in the list of clients
         isGentlefawn = false
         self.clients_links.each do |clientLink|
-            isGentlefawn = true if clientLink.lemon_stand_client.company_name == "Gentlefawn"
+            if clientLink.lemon_stand_client.company_name == "Gentlefawn"
+                isGentlefawn = true
+            end
         end
         # Get product variables
         productVariables = self.getProductVariables
         # Get products by category name
-        orderBotProducts = self.getProducts({category_name: category_name, type: product_type_id})
+        orderBotProducts = self.getProducts({category_name: category_name})
         if !orderBotProducts
             return {data: {message: "Error getting products of the category '"+category_name+"'"}, status: 500}
         end
         # Init variables
-        lemonStandVariants = []
-        lemonStandProduct = {}
-        options = {}
+        lemonStandProducts = []
         # Get parent products
         parents = orderBotProducts.select{|p| p["is_parent"]}
         # Actions per parent product
@@ -241,7 +277,7 @@ class OrderBotClient < ActiveRecord::Base
             # Map parent product
             lemonStandProduct = {
                 name: parent["product_name"],
-                shop_product_type_id: product_type_id,
+                shop_product_type_id: nil,
                 # shop_manufacturer_id: nil,
                 # shop_tax_class_id: nil,
                 title: parent["descriptive_title"],
@@ -256,7 +292,7 @@ class OrderBotClient < ActiveRecord::Base
                 # depth: nil,
                 # width: nil,
                 # height: nil,
-                weight: parent["weight"],
+                # weight: parent["weight"],
                 enabled: parent["active"] ? 1 : 0,
                 # is_on_sale: 0,
                 # sale_price_or_discount: nil,
@@ -271,9 +307,7 @@ class OrderBotClient < ActiveRecord::Base
                 # is_catalog_visible: 1,
                 # is_search_visible: 1,
             }
-            # Get group name
-            group_name = parent["product_group"]
-            # Get product children
+            # Get product's children
             children = orderBotProducts.select{|c| c["parent_id"] == parent["product_id"]}
             # Extract options and map variants
             options = {}
@@ -291,7 +325,7 @@ class OrderBotClient < ActiveRecord::Base
                     # depth: nil,
                     # width: nil,
                     # height: nil,
-                    weight: child["weight"],
+                    # weight: child["weight"],
                     enabled: child["active"] ? 1 : 0,
                     # is_on_sale: 0,
                     # sale_price_or_discount: nil,
@@ -322,27 +356,51 @@ class OrderBotClient < ActiveRecord::Base
                     options[option2[0]].push(option2[1])
                 end
             end
-            # Post products, options, category, group and children
-            self.clients_links.each do |clientLink|
-                # Get lemonstand client
-                lemonStandClient = clientLink.lemon_stand_client
-                # Get lemonstand categories
-                lemonStandCategories = lemonStandClient.getCategories
+            # Insert product to the list
+            lemonStandProducts.push({
+                parent: lemonStandProduct,
+                variants: lemonStandVariants,
+                options: options,
+                product_group: parent["product_group"]
+            })
+        end
+        # Post products, options, category, group and children, per lemonstand client
+        self.clients_links.each do |clientLink|
+            # Get lemonstand client
+            lemonStandClient = clientLink.lemon_stand_client
+            # Get lemonstand categories
+            lemonStandCategories = lemonStandClient.getCategories
+            # Get lemonstand product type
+            lemonStandProductTypes = lemonStandClient.getProductTypes
+            productType = lemonStandProductTypes.detect{|t| t["api_code"] == product_class_name}
+            if !productType
+                return {data: {message: "Invalid product class / product type mapping"}, status: 500}
+            end
+            lemonStandProducts.each do |lemonStandProduct|
+                # Set lemonstand product type
+                lemonStandProduct[:parent][:shop_product_type_id] = productType["id"]
+                # Get group name
+                group_name = lemonStandProduct[:product_group]
                 # Map parent category
-                category = lemonStandCategories.detect{|c| c["api_code"] == category_name}
+                category = lemonStandCategories.detect{|c| c["api_code"] == "category-"+category_name}
+                # Get array of parents ids in case the category has been nested on LemonStand's side
+                categoryChainUp = getCategoryChainUp(category["id"],lemonStandCategories)
                 # Map subcategory
-                subCategory = lemonStandCategories.detect{|c| c["shop_category_id"] == category["id"] and c["api_code"] == group_name}
+                subCategory = lemonStandCategories.detect{|c| c["shop_category_id"] == category["id"] and c["api_code"] == "category-"+category_name+"-group-"+group_name}
                 # Check if product exists               
-                productExists = lemonStandClient.getProduct(lemonStandProduct[:sku], {embed: "variants,options,categories"})
+                productExists = lemonStandClient.getProduct(lemonStandProduct[:parent][:sku], {embed: "variants,options,categories"})
+                action = ""
                 if !productExists         
-                    postedParent = lemonStandClient.postProduct(lemonStandProduct)
+                    postedParent = lemonStandClient.postProduct(lemonStandProduct[:parent])
+                    action = "creating"
                 else
-                    postedParent = lemonStandClient.patchProduct(productExists["id"],lemonStandProduct)
+                    postedParent = lemonStandClient.patchProduct(productExists["id"],lemonStandProduct[:parent])
+                    action = "updating"
                 end
                 if !postedParent
-                    return {data: {message: "Error syncing product sku '"+lemonStandProduct[:sku]+"'"}, status: 500}
+                    return {data: {message: "Error "+action+" product sku '"+lemonStandProduct[:parent][:sku]+"'"}, status: 500}
                 end 
-                options.each do |name, values|
+                lemonStandProduct[:options].each do |name, values|
                     option = {
                         name: name,
                         values: values,
@@ -352,27 +410,33 @@ class OrderBotClient < ActiveRecord::Base
                     if productExists and productExists.key?("options")
                         optionExists = productExists["options"]["data"].detect{|o| o["name"] == name}
                     end
+                    action = ""
                     if optionExists.nil?
                         postedOption = lemonStandClient.postProductOption(postedParent["id"],option)
+                        action = "creating"
                     else
                         postedOption = lemonStandClient.patchProductOption(postedParent["id"],optionExists["id"],option)                        
+                        action = "updating"
                     end
                     if !postedOption
-                        return {data: {message: "Error syncing product option '"+name+"'"}, status: 500}
+                        return {data: {message: "Error "+action+" product option '"+name+"'"}, status: 500}
                     end 
                 end
-                lemonStandVariants.each do |variant|
+                lemonStandProduct[:variants].each do |variant|
                     variantExists = nil
                     if productExists and productExists.key?("variants")
                         variantExists = productExists["variants"]["data"].detect{|o| o["sku"] == variant[:sku]}
                     end
+                    action = ""
                     if variantExists.nil?
                         postedVariant = lemonStandClient.postProductVariant(postedParent["id"],variant)
+                        action = "creating"
                     else
                         postedVariant = lemonStandClient.patchProductVariant(postedParent["id"],variantExists["id"],variant)
+                        action = "updating"
                     end                    
                     if !postedVariant
-                        return {data: {message: "Error syncing product variant sku '"+variant[:sku]+"'"}, status: 500}
+                        return {data: {message: "Error "+action+" product variant sku '"+variant[:sku]+"'"}, status: 500}
                     end                     
                 end
                 # Delete all categories
@@ -384,6 +448,18 @@ class OrderBotClient < ActiveRecord::Base
                         end                        
                     end
                 end
+                # Post parent's parents categories
+                if !categoryChainUp.empty?
+                    categoryChainUp.each do |categoryId|
+                        categoryObject = {
+                            shop_category_id: categoryId
+                        }
+                        postedCategory = lemonStandClient.postProductCategory(postedParent["id"],categoryObject)
+                        if !postedCategory
+                            return {data: {message: "Error syncing category id "+categoryId+" for product sku "+postedParent["sku"]}, status: 500}
+                        end                        
+                    end
+                end                
                 # Post parent category
                 categoryObject = {
                     shop_category_id: category["id"]
@@ -423,5 +499,14 @@ class OrderBotClient < ActiveRecord::Base
             end
             return [optionName, variableValueName]
         end
+    end
+
+    def getCategoryChainUp(category_id,categories,result=[])
+        category = categories.detect{|c| c["id"] == category_id}
+        if !category["shop_category_id"].nil?
+            result.push(category["shop_category_id"])
+            getCategoryChainUp(category["shop_category_id"],categories,result)
+        end
+        result
     end
 end

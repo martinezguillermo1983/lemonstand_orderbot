@@ -43,19 +43,32 @@ class ClientsLink < ActiveRecord::Base
     end
 
     def setOrderMapping(lemon_stand_order, order_bot_order)
-        OrderMapping.create({
+        if !order_bot_order["order_process_result"].nil?
+            orderBotOrderId = order_bot_order["order_process_result"].first["orderbot_order_id"]
+        else
+            orderBotOrderId = order_bot_order["orderbot_order_id"]
+        end
+        mapping = {
             clients_link_id: self.id,
             lemon_stand_order_id: lemon_stand_order["id"],
-            order_bot_order_id: order_bot_order["orderbot_order_id"]
-        })
+            order_bot_order_id: orderBotOrderId
+        }
+        exists = OrderMapping.where(mapping).first
+        if exists.nil?
+            OrderMapping.create(mapping)
+        end
     end
 
     def setCustomerMapping(lemon_stand_customer, order_bot_account)
-        customerMapping = CustomerMapping.create({
+        mapping = {
             clients_link_id: self.id,
             lemon_stand_customer_id: lemon_stand_customer["id"],
             order_bot_account_id: order_bot_account["orderbot_account_id"]
-        })
+        }
+        customerMapping = CustomerMapping.where(mapping).first
+        if customerMapping.nil?
+            customerMapping = CustomerMapping.create(mapping)
+        end
         order_bot_account["customers"].each_with_index do |customer,key|
             customerMapping.setCustomerShippingMapping(lemon_stand_customer["shipping_addresses"]["data"][key]["id"], customer["orderbot_customer_id"]);
         end
@@ -65,11 +78,11 @@ class ClientsLink < ActiveRecord::Base
         lemonStandClient = self.lemon_stand_client 
         orderBotClient = self.order_bot_client
         states = orderBotClient.getStates
-        if states.nil?
+        if !states
             return {data: {message: "States list not found."}, status: 404}
         end   
         countries = orderBotClient.getCountries
-        if countries.nil?
+        if !countries
             return {data: {message: "Countries list not found."}, status: 404}
         end  
         lemonStandBillingAddress = lemonStandCustomer["billing_addresses"]["data"].first
@@ -122,11 +135,11 @@ class ClientsLink < ActiveRecord::Base
         lemonStandClient = self.lemon_stand_client
         orderBotClient = self.order_bot_client
         states = orderBotClient.getStates
-        if states.nil?
+        if !states
             return {data: {message: "States list not found."}, status: 404}
         end  
         countries = orderBotClient.getCountries
-        if countries.nil?
+        if !countries
             return {data: {message: "Countries list not found."}, status: 404}
         end  
         orderStatus = '';
@@ -141,26 +154,39 @@ class ClientsLink < ActiveRecord::Base
               orderStatus = 'confirmed'
         end
         lemonStandCustomer = lemonStandOrder["customer"]["data"]
-        lemonStandBillingAddress = lemonStandCustomer["billing_addresses"]["data"].first
         lemonStandInvoice = lemonStandOrder["invoices"]["data"].first;
         lemonStandShipment = lemonStandInvoice["shipments"]["data"].first
         lemonStandShippingMethod = lemonStandShipment["shipping_method"]["data"]
         lemonStandShippingAddress =  lemonStandShipment["shipping_address"]["data"]
         lemonStandItems = lemonStandOrder["items"]["data"]
         lemonStandPayments = lemonStandInvoice["payments"]["data"]
+        lemonStandBillingAddress = lemonStandPayments.first["billing_address"]["data"]
+        lemonStandTaxClasses = lemonStandClient.getTaxClasses({embed:"rates"})
+        if !lemonStandTaxClasses
+            return {data: {message: "LemonStand default Tax Class not found."}, status: 404}
+        end
+        lemonStandDefaultTaxClass = nil
+        lemonStandTaxClasses.each do |taxClass|
+            if taxClass["is_default"]
+                lemonStandDefaultTaxClass = taxClass
+                break
+            end
+        end
         # Map customer ids
+        mappedOrderBotCustomer = self.mapCustomer(lemonStandCustomer)
+        if mappedOrderBotCustomer[:status] != 200
+            return {data: {message: "Error mapping customer id "+lemonStandCustomer["id"].to_s}, status: 500}
+        end
         orderBotAccountId = self.mapCustomerId(lemonStandCustomer["id"])
         if orderBotAccountId.nil?
-            mappedOrderBotCustomer = self.mapCustomer(lemonStandCustomer)
-            if mappedOrderBotCustomer[:status] != 200
-                return {data: {message: "Error mapping customer id "+lemonStandCustomer["id"].to_s}, status: 500}
-            end
             orderBotCustomer = orderBotClient.postCustomer(mappedOrderBotCustomer[:data])
-            self.setCustomerMapping(lemonStandCustomer, orderBotCustomer.first)
             orderBotAccountId = orderBotCustomer.first["orderbot_account_id"]
+            self.setCustomerMapping(lemonStandCustomer, orderBotCustomer.first)
         end
-        lemonStandShippingAddressId = lemonStandClient.findShippingAddressId(lemonStandOrder);
+
+        lemonStandShippingAddressId = lemonStandClient.findShippingAddressId(lemonStandOrder)
         orderBotCustomerId = self.mapCustomerShippingId(lemonStandCustomer["id"], lemonStandShippingAddressId)
+
         # Reference ids
         orderBotReferenceAccountId = lemonStandClient.client_code+"-"+lemonStandCustomer["id"].to_s,
         orderBotReferenceCustomerId = lemonStandClient.client_code+"-"+lemonStandShippingAddressId.to_s,        
@@ -182,17 +208,11 @@ class ClientsLink < ActiveRecord::Base
             insure_packages: false,
             shipping_code: lemonStandShippingMethod["api_code"],
             email_confirmation_address: "", # @TODO Test if email goes to client or admin
-            subtotal: lemonStandOrder["subtotal_invoiced"].to_f,
-            shipping: lemonStandOrder["total_shipping_quote"].to_f,
-            order_discount: lemonStandOrder["shipping_quote"].to_f, 
-            order_total: lemonStandOrder["total"].to_f,
-            shipping_tax: [ # TODO Review
-                {
-                    tax_name: "GST", 
-                    tax_rate: lemonStandOrder["total_shipping_tax"].to_f / lemonStandOrder["total_shipping_quote"].to_f,
-                    amount: lemonStandOrder["total_shipping_tax"].to_f
-                }
-            ],
+            subtotal: (lemonStandOrder["subtotal_invoiced"] + lemonStandOrder["total_discount"].to_f).to_f.round(2),
+            shipping: lemonStandOrder["total_shipping_quote"].to_f.round(2),
+            order_discount: lemonStandOrder["total_discount"].to_f.round(2), 
+            order_total: lemonStandOrder["total"].to_f.round(2),
+            shipping_tax: [],
             shipping_address: {
                 store_name: "",
                 first_name: lemonStandShippingAddress["first_name"],
@@ -235,13 +255,15 @@ class ClientsLink < ActiveRecord::Base
             #     }
             # ]
         }
+        shippingTaxes = calculateTaxes(lemonStandDefaultTaxClass["rates"]["data"], lemonStandShippingAddress, lemonStandOrder["total_shipping_quote"])
+        orderBotOrder[:shipping_tax] = shippingTaxes
         # Payments array
         payments = [];
         lemonStandPayments.each do |payment|
             payments.push({
                 payment_type: "visa", # @TODO ask them to expose the payment type
                 payment_date: DateTime.parse(payment["processed_at"]).strftime("%Y-%m-%d"),
-                amount_paid: payment["amount"].to_f,
+                amount_paid: payment["amount"].to_f.round(2),
                 check_no: nil,
                 notes: nil,
                 credit_card_info: {
@@ -258,30 +280,72 @@ class ClientsLink < ActiveRecord::Base
         # Order lines array
         orderLines = [];
         lineNumber = 1;
+        totalItems = lemonStandItems.size
         lemonStandItems.each do |item|
-            productTaxes = []
-            item["product"]["data"]["tax"]["data"]["rates"]["data"].each do |tax|
-                if tax["state_code"] == lemonStandShippingAddress["state_code"]
-                    productTaxes.push({
-                        tax_name: tax["tax_name"],
-                        tax_rate: tax["rate"].to_f / 100,
-                        amount: item["price"] * tax["rate"].to_f / 100                     
-                    })
-                end
-            end
+            taxablePrice = item["price"] - lemonStandOrder["total_discount"].to_f / totalItems 
+            productTaxes = calculateTaxes(item["product"]["data"]["tax"]["data"]["rates"]["data"], lemonStandShippingAddress, taxablePrice)
             orderLines.push({
                 line_number: lineNumber,
                 product_sku: item["sku"],
                 custom_description: item["description"],
                 quantity: item["quantity"],
-                price: item["price"],
-                product_discount: item["discount"],
+                price: item["base_price"].round(2),
+                product_discount: (item["discount"] + item["base_price"] - item["price"]).round(2),
                 product_taxes: productTaxes
             })
             lineNumber = lineNumber + 1
         end
         orderBotOrder[:order_lines] = orderLines
-        return {data: orderBotOrder, status: 200}
+        # Check whether order exists
+        orderBotOrderId = self.mapOrderId(lemonStandOrder["id"]) 
+        if orderBotOrderId.nil? 
+            pushedOrder = self.order_bot_client.postOrder(orderBotOrder)
+            orderBotOrderId = pushedOrder["order_process_result"]["orderbot_order_id"]
+        else
+            pushedOrder = self.order_bot_client.putOrder(orderBotOrderId, orderBotOrder)
+            orderBotOrderId = pushedOrder["orderbot_order_id"]
+        end
+        if !pushedOrder
+            return {data: {message: "Error syncing order id "+lemonStandOrder["id"].to_s+" to Orderbot's client "+self.order_bot_client.company_name}, status: 500}
+        end
+        # Check if new customer was created and map
+        if orderBotCustomerId.nil?
+            createdOrderBotOrder = self.order_bot_client.getOrder(orderBotOrderId)
+            customerMapping = CustomerMapping.where({
+                clients_link_id: self.id,
+                lemon_stand_customer_id: lemonStandCustomer["id"],
+                order_bot_account_id: orderBotAccountId
+            }).first
+            customerMapping.setCustomerShippingMapping(lemonStandShippingAddressId, createdOrderBotOrder["customer_id"])
+        end
+        self.setOrderMapping(lemonStandOrder, pushedOrder)
+        return {data: {message: "Order successfully synced"}, status: 200}
+    end
+
+    def calculateTaxes(taxes, shippingAddress, price)
+        taxesArray = []
+        taxes.each do |taxI|
+            if taxI["state_code"] == shippingAddress["state_code"]
+                amount = price.to_f.round(2)   
+                if taxI["is_compound"]
+                    prevTax = nil
+                    taxes.each do |taxJ|
+                        if taxJ["priority"] == taxI["priority"] - 1
+                            prevTax = taxJ
+                        end
+                    end
+                    if !prevTax.nil?
+                        amount += (price * prevTax["rate"].to_f / 100).round(2)  
+                    end
+                end
+                taxesArray.push({
+                    tax_name: taxI["tax_name"],
+                    tax_rate: taxI["rate"].to_f / 100,
+                    amount: (amount * taxI["rate"].to_f / 100).round(2)                
+                })
+            end
+        end
+        taxesArray        
     end
 
 end

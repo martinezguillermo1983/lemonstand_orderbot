@@ -65,7 +65,7 @@ class LemonStandClient < ActiveRecord::Base
             :headers => headers
         )
         if response["meta"]["success"]
-            response = response["data"]
+            response = true
         else
             response = false
         end
@@ -163,6 +163,10 @@ class LemonStandClient < ActiveRecord::Base
         httpPost("producttype/", product_type)    
     end 
 
+    def getTaxClasses(params={})
+        httpGet("taxclasses/", params)        
+    end
+
     def self.getByClientCode(client_code)
         self.where(:client_code => client_code).first
     end
@@ -190,42 +194,39 @@ class LemonStandClient < ActiveRecord::Base
         id
     end
 
-    def pushCustomer(customer_id)
-        parameters = {:embed => "groups,orders,shipping_addresses,billing_addresses"}
-        lemonStandCustomer  = self.getCustomer(customer_id, parameters)
-        if lemonStandCustomer.nil?
-            return {data: {message: "LemonStand customer not found."}, status: 404}
-        end          
-        self.clients_links.each do |clientLink|
-            orderBotCustomer = clientLink.mapCustomer(lemonStandCustomer, self)
-            if orderBotCustomer[:status] != 200
-                return orderBotCustomer
-            end    
-            pushedCustomer = clientLink.order_bot_client.postCustomer(orderBotCustomer)
-            if !pushedCustomer
-                return {data: {message: "Error pushing customer id "+customer_id.to_s+" to Orderbot's client "+clientLink.order_bot_client.company_name}, status: 500}
-            end
-        end
-        return {data: {message: "Customer successfully pushed"}, status: 200}
-    end
+    # def pushCustomer(customer_id)
+    #     parameters = {:embed => "groups,orders,shipping_addresses,billing_addresses"}
+    #     lemonStandCustomer  = self.getCustomer(customer_id, parameters)
+    #     if lemonStandCustomer.nil?
+    #         return {data: {message: "LemonStand customer not found."}, status: 404}
+    #     end          
+    #     self.clients_links.each do |clientLink|
+    #         orderBotCustomer = clientLink.mapCustomer(lemonStandCustomer, self)
+    #         if orderBotCustomer[:status] != 200
+    #             return orderBotCustomer
+    #         end    
+    #         pushedCustomer = clientLink.order_bot_client.postCustomer(orderBotCustomer[:data])
+    #         if !pushedCustomer
+    #             return {data: {message: "Error pushing customer id "+customer_id.to_s+" to Orderbot's client "+clientLink.order_bot_client.company_name}, status: 500}
+    #         end
+    #     end
+    #     return {data: {message: "Customer successfully pushed"}, status: 200}
+    # end
 
-    def pushOrder(order_id)
-        parameters = {:embed => "customer.shipping_addresses,customer.billing_addresses,items,items.product,items.product.variants,items.product.tax.rates,invoices.billing_address,invoices.shipments,invoices.shipments.shipping_address,invoices.shipments.billing_address,invoices.shipments.shipping_method,invoices.payments.transactions,invoices.payments.attempts.payment_methods"}
+    def syncOrder(order_id)
+        parameters = {:embed => "customer.shipping_addresses,customer.billing_addresses,items,items.product,items.product.variants,items.product.tax.rates,invoices.billing_address,invoices.shipments,invoices.shipments.shipping_address,invoices.shipments.billing_address,invoices.shipments.shipping_method.tax.rates,invoices.payments.transactions,invoices.payments.attempts.payment_methods,invoices.payments.billing_address"}
         lemonStandOrder = self.getOrder(order_id, parameters)
         if lemonStandOrder.nil?
             return {data: {message: "LemonStand order not found."}, status: 404}
-        end   
+        end
+        orderBotOrder = nil
         self.clients_links.each do |clientLink|
             orderBotOrder = clientLink.mapOrder(lemonStandOrder)
             if orderBotOrder[:status] != 200
                 return orderBotOrder
-            end 
-            pushedOrder = clientLink.order_bot_client.postOrder(orderBotOrder)
-            if !pushedOrder
-                return {data: {message: "Error pushing order id "+order_id.to_s+" to Orderbot's client "+clientLink.order_bot_client.company_name}, status: 500}
             end
         end
-        return {data: {message: "Order successfully pushed"}, status: 200}
+        return {data: {message: "Order successfully synced"}, status: 200}
     end
 
 end

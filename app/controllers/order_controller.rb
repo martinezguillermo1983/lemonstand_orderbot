@@ -1,7 +1,10 @@
 class OrderController < ApplicationController
-    # def sync
-    #     lemonStandClient = LemonStandClient.getByClientCode(params[:client_code]);
-    #     response = lemonStandClient.pushOrder(params[:data][:id])
-    #     render :json => response
-    # end
+    def sync
+        lemonStandClient = LemonStandClient.getByClientCode(params[:client_code]);
+        if !lemonStandClient
+            return render :json => {message:"Invalid client_code"}, :status => 400
+        end
+        response = lemonStandClient.delay.syncOrder(params[:data][:id])
+        return render :json => {message:"Success"}, :status => 200
+    end
 end
