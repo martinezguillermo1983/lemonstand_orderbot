@@ -1,4 +1,23 @@
 Rails.application.routes.draw do
+  get 'sessions/new'
+
+  get 'users/new'
+
+  get    'login'   => 'sessions#new'
+  post   'login'   => 'sessions#create'
+  delete 'logout'  => 'sessions#destroy'
+
+  namespace :api do
+    namespace :v1 do
+      get 'productclasses'  => 'product#getProductClasses'
+      get 'productclasses/:product_class_id/categories'  => 'product#getProductCategoriesByProductClass'
+
+      post 'sync/sync/order/:client_code'     => 'order#sync'
+      post 'sync/sync/customer/:client_code'  => 'customer#sync'
+      post 'sync/sync/product/:client_code'  => 'product#sync'
+    end
+  end
+
   # The priority is based upon order of creation: first created -> highest priority.
   # See how all your routes lay out with "rake routes".
 
@@ -12,17 +31,7 @@ Rails.application.routes.draw do
   #   get 'products/:id/purchase' => 'catalog#purchase', as: :purchase
 
   # Example resource route (maps HTTP verbs to controller actions automatically):
-    # resources :test
-
-    get 'api/productclasses'  => 'product#getProductClasses'
-    get 'api/productclasses/:product_class_id/categories'  => 'product#getProductCategoriesByProductClass'
-
-    post 'sync/sync/order/:client_code'     => 'order#sync'
-    post 'sync/sync/customer/:client_code'  => 'customer#sync'
-    post 'sync/sync/product/:client_code'  => 'product#sync'
-
-    get "/404" => "errors#not_found"
-    get "/500" => "errors#exception"
+  #   resources :products
 
   # Example resource route with options:
   #   resources :products do

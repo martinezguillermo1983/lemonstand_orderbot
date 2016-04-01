@@ -1,4 +1,4 @@
-class OrderController < ApplicationController
+class Api::V1::OrderController < ApplicationController
     def sync
         lemonStandClient = LemonStandClient.getByClientCode(params[:client_code]);
         if !lemonStandClient

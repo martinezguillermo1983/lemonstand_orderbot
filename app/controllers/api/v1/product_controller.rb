@@ -1,4 +1,4 @@
-class ProductController < ApplicationController
+class Api::V1::ProductController < ApplicationController
     before_filter :authenticate_orderbot
 
     def sync
