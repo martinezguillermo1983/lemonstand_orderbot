@@ -11,6 +11,8 @@ class CreateClientsLinks < ActiveRecord::Migration
         t.string :order_bot_account_group_name
         t.integer :order_bot_distribution_center_id
         t.string :order_bot_distribution_center_name
+        t.integer :order_bot_website_id
+        t.string :order_bot_website_name
     end
     add_index :clients_links, [:lemon_stand_client_id, :order_bot_client_id], name: "index_clients_links_lemon_stand_client_id_order_bot_client_id"
     add_index :clients_links, [:order_bot_client_id, :lemon_stand_client_id], name: "index_clients_links_order_bot_client_id_lemon_stand_client_id"

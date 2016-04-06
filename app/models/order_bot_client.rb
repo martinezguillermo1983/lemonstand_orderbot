@@ -1,6 +1,7 @@
 class OrderBotClient < ActiveRecord::Base
     has_many :lemon_stand_clients, :through => :clients_links
     has_many :clients_links, :class_name => "ClientsLink"
+    has_and_belongs_to_many :users
     
     include HTTParty
     format :json

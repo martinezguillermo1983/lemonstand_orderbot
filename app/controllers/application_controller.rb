@@ -11,4 +11,19 @@ class ApplicationController < ActionController::Base
             OrderBotClient.exists?(client_code: token)
         end
     end
+
+    private
+    def authenticate_lemonstand
+        authenticate_or_request_with_http_token do |token, options|
+            params[:client_code] = token
+            LemonStandClient.exists?(client_code: token)
+        end
+    end
+
+    private
+    def require_login
+      unless current_user
+        redirect_to "/login"
+      end
+    end
 end

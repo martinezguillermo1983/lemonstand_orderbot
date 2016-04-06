@@ -1,4 +1,5 @@
 class Api::V1::ProductController < ApplicationController
+    skip_before_filter :verify_authenticity_token  
     before_filter :authenticate_orderbot
 
     def sync
@@ -8,10 +9,7 @@ class Api::V1::ProductController < ApplicationController
             return render :json => {message: "Orderbot client not found"}, :status => 404
         end
         response = orderBotClient.pushProductStructure
-        response = orderBotClient.pushProductsByTypeAndCategory('Sellable Inventory','Short')
-        # lsClient = LemonStandClient.getByClientCode(params[:client_code])
-
-        # response = lsClient.syncOrder(18)
+        response = orderBotClient.pushProductsByTypeAndCategory(params[:product_class_name],params[:product_category_name])
         return render :json => response[:data], :status => response[:status]
     end
 

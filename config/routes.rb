@@ -1,20 +1,24 @@
 Rails.application.routes.draw do
-  get 'sessions/new'
+  get     '/'               => 'root#show'
 
-  get 'users/new'
+  get     'sessions/new'
 
-  get    'login'   => 'sessions#new'
-  post   'login'   => 'sessions#create'
-  delete 'logout'  => 'sessions#destroy'
+  get     'users/new'
+
+  get     'login'           => 'sessions#new'
+  post    'login'           => 'sessions#create'
+  get     'logout'          => 'sessions#destroy'
+
+  get     'products'        => 'sync#products' 
 
   namespace :api do
     namespace :v1 do
-      get 'productclasses'  => 'product#getProductClasses'
-      get 'productclasses/:product_class_id/categories'  => 'product#getProductCategoriesByProductClass'
-
-      post 'sync/sync/order/:client_code'     => 'order#sync'
-      post 'sync/sync/customer/:client_code'  => 'customer#sync'
-      post 'sync/sync/product/:client_code'  => 'product#sync'
+      get 'productclasses/'  => 'product#getProductClasses'
+      get 'productclasses/:product_class_id/categories/'  => 'product#getProductCategoriesByProductClass'
+      
+      post 'sync/products'  => 'product#sync'
+      post 'sync/order/:client_code'     => 'order#sync'
+      post 'sync/customer/:client_code'  => 'customer#sync'
     end
   end
 

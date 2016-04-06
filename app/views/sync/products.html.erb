@@ -1,0 +1,15 @@
+<a href="/">home</a>
+<a href="/logout">logout</a>
+<% provide(:title, "Sync Products") %>
+<h1>Sync Products</h1>
+<div class="row">
+    <div class="col-md-6 col-md-offset-3">
+        <label>Orderbot Client</label>
+        <%= select_tag 'order_bot_client', options_for_select(@orderBotClients, 0), :include_blank => true %>
+        <label>Product Class</label>
+        <%= select_tag 'order_bot_product_class', options_for_select([], ""), :include_blank => true, disabled: "disabled" %>        
+        <label>Product Category</label>
+        <%= select_tag 'order_bot_product_category', options_for_select([], ""), :include_blank => true, disabled: "disabled" %>
+        <%= submit_tag "Sync Products", data: { confirm: "Are you sure?" }, id: "order_bot_sync_products" %>     
+    </div>
+</div>
