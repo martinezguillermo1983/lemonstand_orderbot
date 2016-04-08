@@ -30,10 +30,6 @@ class OrderBotClient < ActiveRecord::Base
             :headers => { 'Content-Type' => 'application/json', 'Accept' => 'application/json' },
             :basic_auth => basicAuth
         )
-        if response["response_code"] != 1
-            response = false
-        end
-        response
     end
 
     def httpPut(uri, body)
@@ -44,10 +40,6 @@ class OrderBotClient < ActiveRecord::Base
             :headers => { 'Content-Type' => 'application/json', 'Accept' => 'application/json' },
             :basic_auth => basicAuth
         )
-        if response["response_code"] != 1
-            response = false
-        end
-        response
     end
 
     def self.getByClientCode(client_code)
@@ -65,7 +57,11 @@ class OrderBotClient < ActiveRecord::Base
     end
 
     def postCustomer(customer)
-        httpPost("Customers.json/", customer)
+        response = httpPost("Customers.json/", customer)
+        if !response.first["success"]
+            response = false
+        end
+        response
     end 
 
     def putCustomer(customer_id, customer)
@@ -75,11 +71,19 @@ class OrderBotClient < ActiveRecord::Base
     # Orders
 
     def postOrder(order)
-        httpPost("Orders.json/", order)
+        response = httpPost("Orders.json/", order)
+        # if response["response_code"] != 1
+        #     response = false
+        # end
+        # response
     end 
 
     def putOrder(order_id, order)
-        httpPut("Orders.json/"+order_id.to_s+"/", order)
+        response = httpPut("Orders.json/"+order_id.to_s+"/", order)
+        if response["response_code"] != 1
+            response = false
+        end
+        response
     end 
 
     def getOrder(order_id, params={})
@@ -124,6 +128,10 @@ class OrderBotClient < ActiveRecord::Base
 
     def getOrderGuides
         httpGet("order_guides.json/")
+    end
+
+    def getOrderGuide(order_guide_id)
+        httpGet("order_guides.json/"+order_guide_id.to_s)
     end
 
     def getAccountGroups
@@ -377,9 +385,17 @@ class OrderBotClient < ActiveRecord::Base
             if !productType
                 return {data: {message: "Invalid product class / product type mapping"}, status: 500}
             end
+            # Get order guide
+            orderBotOrderGuide = self.getOrderGuide(clientLink.order_bot_order_guide_id)
+            # Push products
             lemonStandProducts.each do |lemonStandProduct|
                 # Set lemonstand product type
                 lemonStandProduct[:parent][:shop_product_type_id] = productType["id"]
+                # Get and set product price in the order guide
+                orderGuideProduct = orderBotOrderGuide.detect{|p| p["sku"] == lemonStandProduct[:parent][:sku]}
+                if orderGuideProduct 
+                    lemonStandProduct[:parent][:base_price] = orderGuideProduct["og_price"]
+                end
                 # Get group name
                 group_name = lemonStandProduct[:product_group]
                 # Map parent category
@@ -424,6 +440,11 @@ class OrderBotClient < ActiveRecord::Base
                     end 
                 end
                 lemonStandProduct[:variants].each do |variant|
+                    # Get and set product price in the order guide
+                    orderGuideProduct = orderBotOrderGuide.detect{|p| p["sku"] == variant[:sku]}
+                    if orderGuideProduct 
+                        variant[:base_price] = orderGuideProduct["og_price"]
+                    end
                     variantExists = nil
                     if productExists and productExists.key?("variants")
                         variantExists = productExists["variants"]["data"].detect{|o| o["sku"] == variant[:sku]}
