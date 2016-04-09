@@ -15,12 +15,7 @@
 //= require turbolinks
 //= require_tree .
 $(document).ready(function(){
-    apiUrl = "http://localhost:3000/api/v1/"
-    $.ajaxSetup ({
-        // Disable caching of AJAX responses
-        cache: false
-    });
-
+    $.ajaxSetup({ cache: false });
     $("#order_bot_client").change(function(){
         if ($(this).val() == "") return;
         loadProductClasses($(this).val())
@@ -31,17 +26,15 @@ $(document).ready(function(){
         loadProductCategories($(this).val())
     })
 
-    $("#order_bot_sync_products").click(function(){ 
+    $("#order_bot_sync_products").click(function(){
         syncProducts($("#order_bot_client").val(), $("#order_bot_product_class option[value="+$("#order_bot_product_class").val()+"]").text(), $("#order_bot_product_category option[value="+$("#order_bot_product_category").val()+"]").text())
     })
 
     function loadProductClasses(orderBotClientId) {
         $.ajax({
             cache: false,
-            url:  apiUrl+"productclasses",
-            beforeSend: function(xhr) {
-                xhr.setRequestHeader("Authorization", "Token "+orderBotClientId);
-            },
+            url:  "/api/v1/productclasses",
+            headers: {"Authorization": "Token "+orderBotClientId, "Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
             success: function(data) {
                 response = data[0];
                 var optionsClasses = $("#order_bot_product_class");
@@ -58,10 +51,8 @@ $(document).ready(function(){
     function loadProductCategories(productClassId) {
         $.ajax({
             cache: false,
-            url:  apiUrl+"productclasses/"+productClassId+"/categories/",
-            beforeSend: function(xhr) {
-                xhr.setRequestHeader("Authorization", "Token "+$("#order_bot_client").val());
-            },
+            url:  "/api/v1/productclasses/"+productClassId+"/categories/",
+            headers: {"Authorization": "Token "+$("#order_bot_client").val(), "Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
             success: function(data) {
                 response = data[0];
                 var optionsCategories = $("#order_bot_product_category");
@@ -84,9 +75,9 @@ $(document).ready(function(){
             type: "POST",
             data: JSON.stringify(data),
             contentType: "application/json",
-            url:  apiUrl+"sync/products",
-            beforeSend: function(xhr) {
-                xhr.setRequestHeader("Authorization", "Token "+orderBotClientId);
+            url:  "/api/v1/sync/products",
+            headers: {"Authorization": "Token "+orderBotClientId, "Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            beforeSend: function(xhr) {           
                 $("#order_bot_sync_products").attr("value", "Syncing...")
                 $("#order_bot_sync_products").attr("disabled", true)
                 addLoadingGifAfter($("#order_bot_sync_products"))
