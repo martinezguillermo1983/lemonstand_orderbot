@@ -35,6 +35,7 @@ gem 'bcrypt', '~> 3.1.7'
 gem 'delayed_job_active_record'
 gem 'httparty'
 gem 'dalli'
+gem 'rack-cors', :require => 'rack/cors'
 
 group :development, :test do
   # Call 'byebug' anywhere in the code to stop execution and get a debugger console
