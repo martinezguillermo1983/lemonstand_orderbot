@@ -72,10 +72,10 @@ class OrderBotClient < ActiveRecord::Base
 
     def postOrder(order)
         response = httpPost("Orders.json/", order)
-        # if response["response_code"] != 1
-        #     response = false
-        # end
-        # response
+        if response["response_code"] != 1
+            response = false
+        end
+        response
     end 
 
     def putOrder(order_id, order)
@@ -263,13 +263,6 @@ class OrderBotClient < ActiveRecord::Base
     end
 
     def pushProductsByTypeAndCategory(product_class_name, category_name)
-        # Check if Gentlefawn is in the list of clients
-        isGentlefawn = false
-        self.clients_links.each do |clientLink|
-            if clientLink.lemon_stand_client.company_name == "Gentlefawn"
-                isGentlefawn = true
-            end
-        end
         # Get product variables
         productVariables = self.getProductVariables
         # Get products by category name
@@ -277,10 +270,39 @@ class OrderBotClient < ActiveRecord::Base
         if !orderBotProducts
             return {data: {message: "Error getting products of the category '"+category_name+"'"}, status: 500}
         end
+        pushProducts(orderBotProducts, product_class_name, category_name)
+    end
+
+    def pushProductBySku(product_sku, product_class_name, category_name)
+        # Get product variables
+        productVariables = self.getProductVariables
+        # Get products by category name
+        orderBotParent = self.getProducts({product_sku: product_sku})
+        if !orderBotParent.first
+            return {data: {message: "Error getting product sku'"+product_sku+"'"}, status: 500}
+        end
+        orderBotProducts = self.getProducts({group_name: orderBotParent.first["product_group"]})
+        pushProducts(orderBotProducts, product_class_name, category_name, product_sku)
+    end
+    
+    def pushProducts(orderBotProducts, product_class_name = nil, category_name = nil, product_sku = nil)
+        # Get product variables
+        productVariables = self.getProductVariables
+        # Check if Gentlefawn is in the list of clients
+        isGentlefawn = false
+        self.clients_links.each do |clientLink|
+            if clientLink.lemon_stand_client.company_name == "Gentlefawn"
+                isGentlefawn = true
+            end
+        end
         # Init variables
         lemonStandProducts = []
         # Get parent products
-        parents = orderBotProducts.select{|p| p["is_parent"]}
+        if !product_sku.nil?
+            parents = orderBotProducts.select{|p| p["is_parent"] && p["sku"] == product_sku}
+        else
+            parents = orderBotProducts.select{|p| p["is_parent"]}
+        end
         # Actions per parent product
         parents.each do |parent|
             # Map parent product
@@ -305,16 +327,17 @@ class OrderBotClient < ActiveRecord::Base
                 enabled: parent["active"] ? 1 : 0,
                 # is_on_sale: 0,
                 # sale_price_or_discount: nil,
-                # track_inventory: 0,
+                track_inventory: 1,
                 # allow_preorder: 0,
-                # in_stock_amount: 0,
-                # hide_out_of_stock: 0,
+                in_stock_amount: 0,
+                hide_out_of_stock: 0,
                 # out_of_stock_threshold: 0,
                 # low_stock_threshold: nil,
                 # expected_availability_date: nil,
                 # allow_negative_stock: 0,
                 # is_catalog_visible: 1,
                 # is_search_visible: 1,
+                order_bot_product: parent 
             }
             # Get product's children
             children = orderBotProducts.select{|c| c["parent_id"] == parent["product_id"]}
@@ -338,8 +361,8 @@ class OrderBotClient < ActiveRecord::Base
                     enabled: child["active"] ? 1 : 0,
                     # is_on_sale: 0,
                     # sale_price_or_discount: nil,
-                    # track_variant_inventory: 0,
-                    # in_stock_amount: nil,
+                    track_variant_inventory: 1,
+                    in_stock_amount: 0,
                     # expected_availability_date: nil,
                     options: [
                         {
@@ -350,7 +373,8 @@ class OrderBotClient < ActiveRecord::Base
                             name: option2[0],
                             value: option2[1]
                         }
-                    ]                    
+                    ],
+                    order_bot_product: child                 
                 })
                 if !options.has_key?(option1[0])
                     options[option1[0]] = []
@@ -396,6 +420,9 @@ class OrderBotClient < ActiveRecord::Base
                 if orderGuideProduct 
                     lemonStandProduct[:parent][:base_price] = orderGuideProduct["og_price"]
                 end
+                # Set inventory amount
+                distributionCenter = lemonStandProduct[:parent][:order_bot_product]["inventory_quantities"].detect{|dc| dc["distribution_center_id"] == clientLink.order_bot_distribution_center_id}
+                lemonStandProduct[:parent][:in_stock_amount] = distributionCenter["inventory_quantity"]
                 # Get group name
                 group_name = lemonStandProduct[:product_group]
                 # Map parent category
@@ -445,6 +472,9 @@ class OrderBotClient < ActiveRecord::Base
                     if orderGuideProduct 
                         variant[:base_price] = orderGuideProduct["og_price"]
                     end
+                    # Set inventory amount
+                    distributionCenter = variant[:order_bot_product]["inventory_quantities"].detect{|dc| dc["distribution_center_id"] == clientLink.order_bot_distribution_center_id}
+                    variant[:in_stock_amount] = distributionCenter["inventory_quantity"]
                     variantExists = nil
                     if productExists and productExists.key?("variants")
                         variantExists = productExists["variants"]["data"].detect{|o| o["sku"] == variant[:sku]}

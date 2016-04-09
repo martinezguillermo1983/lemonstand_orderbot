@@ -9,7 +9,14 @@ class Api::V1::ProductController < ApplicationController
             return render :json => {message: "Orderbot client not found"}, :status => 404
         end
         response = orderBotClient.pushProductStructure
-        response = orderBotClient.pushProductsByTypeAndCategory(params[:product_class_name],params[:product_category_name])
+        if response[:status] != 200
+            return render :json => response[:data], :status => response[:status]
+        end
+        if !params[:product_sku].nil?
+            response = orderBotClient.pushProductBySku(params[:product_sku], params[:product_class_name],params[:product_category_name])
+        else
+            response = orderBotClient.pushProductsByTypeAndCategory(params[:product_class_name],params[:product_category_name])
+        end
         return render :json => response[:data], :status => response[:status]
     end
 
@@ -72,6 +79,26 @@ class Api::V1::ProductController < ApplicationController
             })
         end
         render :json => productClassesList, :status => 200
+    end
+
+    def getProductsByCategory
+        orderBotClient = OrderBotClient.getByClientCode(params[:client_code])
+        if orderBotClient.nil?
+            return render :json => {message: "Orderbot client not found"}, :status => 404
+        end
+        products = orderBotClient.getProducts({category_name: params[:category_name]})
+        if products.nil?
+            return {data: {message: "Orderbot's products not found"}, status: 404}
+        end
+        productsList = []
+        parents = orderBotProducts.select{|p| p["is_parent"]}end
+        parents.each do |parent|
+            productsList.push({
+                name: parent["product_name"],
+                sku: parent["sku"],
+                })
+        end
+        render :json => productsList, :status => 200
     end
 
 end

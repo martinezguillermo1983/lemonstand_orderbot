@@ -121,7 +121,7 @@ class LemonStandClient < ActiveRecord::Base
 
     def postProduct(product)
         httpPost("product/", product)
-    end  
+    end 
 
     def patchProduct(product_id, product)
         httpPatch("product/"+product_id.to_s, product)

@@ -146,7 +146,7 @@ class ClientsLink < ActiveRecord::Base
         case lemonStandOrder["status"] 
             when "Paid"
               orderStatus = 'to_be_shipped'
-            when "Canceled"
+            when "Cancelled"
               orderStatus = 'quote'
             when "Shipped"
               orderStatus = 'shipped'
@@ -208,9 +208,9 @@ class ClientsLink < ActiveRecord::Base
             insure_packages: false,
             shipping_code: lemonStandShippingMethod["api_code"],
             email_confirmation_address: "", # @TODO Test if email goes to client or admin
-            subtotal: (lemonStandOrder["subtotal_invoiced"] + lemonStandOrder["total_discount"].to_f).to_f.round(2),
+            subtotal: 0,
             shipping: lemonStandOrder["total_shipping_quote"].to_f.round(2),
-            order_discount: lemonStandOrder["total_discount"].to_f.round(2), 
+            order_discount: 0, 
             order_total: lemonStandOrder["total"].to_f.round(2),
             shipping_tax: [],
             shipping_address: {
@@ -281,6 +281,7 @@ class ClientsLink < ActiveRecord::Base
         orderLines = [];
         lineNumber = 1;
         totalItems = lemonStandItems.size
+        itemDiscounts = 0
         lemonStandItems.each do |item|
             taxablePrice = item["price"] - lemonStandOrder["total_discount"].to_f / totalItems 
             productTaxes = calculateTaxes(item["product"]["data"]["tax"]["data"]["rates"]["data"], lemonStandShippingAddress, taxablePrice)
@@ -289,25 +290,32 @@ class ClientsLink < ActiveRecord::Base
                 product_sku: item["sku"],
                 custom_description: item["description"],
                 quantity: item["quantity"],
-                price: item["base_price"].round(2),
-                product_discount: (item["discount"] + item["base_price"] - item["price"]).round(2),
+                price: item["original_price"].round(2),
+                product_discount: (item["discount"]).round(2),
                 product_taxes: productTaxes
             })
             lineNumber = lineNumber + 1
+            itemDiscounts = itemDiscounts + item["discount"]
         end
         orderBotOrder[:order_lines] = orderLines
+        orderBotOrder[:order_discount] = (lemonStandOrder["total_discount"].to_f - itemDiscounts).round(2)
+        orderBotOrder[:subtotal] = (lemonStandOrder["subtotal_invoiced"] + orderBotOrder[:order_discount]).to_f.round(2)
         # Check whether order exists
         orderBotOrderId = self.mapOrderId(lemonStandOrder["id"]) 
         if orderBotOrderId.nil? 
             pushedOrder = self.order_bot_client.postOrder(orderBotOrder)
-            orderBotOrderId = pushedOrder["order_process_result"]["orderbot_order_id"]
+            if !pushedOrder
+                return {data: {message: "Error syncing order id "+lemonStandOrder["id"].to_s+" to Orderbot's client "+self.order_bot_client.company_name}, status: 500}
+            end
+            orderBotOrderId = pushedOrder["order_process_result"].first["orderbot_order_id"]
         else
             pushedOrder = self.order_bot_client.putOrder(orderBotOrderId, orderBotOrder)
+            if !pushedOrder
+                return {data: {message: "Error syncing order id "+lemonStandOrder["id"].to_s+" to Orderbot's client "+self.order_bot_client.company_name}, status: 500}
+            end
             orderBotOrderId = pushedOrder["orderbot_order_id"]
         end
-        if !pushedOrder
-            return {data: {message: "Error syncing order id "+lemonStandOrder["id"].to_s+" to Orderbot's client "+self.order_bot_client.company_name}, status: 500}
-        end
+
         # Check if new customer was created and map
         if orderBotCustomerId.nil?
             createdOrderBotOrder = self.order_bot_client.getOrder(orderBotOrderId)
@@ -319,6 +327,19 @@ class ClientsLink < ActiveRecord::Base
             customerMapping.setCustomerShippingMapping(lemonStandShippingAddressId, createdOrderBotOrder["customer_id"])
         end
         self.setOrderMapping(lemonStandOrder, pushedOrder)
+        # Update inventory amounts
+        lemonStandItems.each do |item|
+            orderBotProduct = orderBotClient.getProducts({product_sku: item["sku"]})
+            if !orderBotProduct.first
+                return {data: {message: "Error updating product stock for sku "+item["sku"]}, status: 500}
+            end
+            # Get and set inventory amount
+            distributionCenter = orderBotProduct.first["inventory_quantities"].detect{|dc| dc["distribution_center_id"] == self.order_bot_distribution_center_id}
+            response = lemonStandClient.patchProduct(item["sku"], {in_stock_amount: distributionCenter["inventory_quantity"]})            
+            if !response
+                return {data: {message: "Error updating product stock for sku "+item["sku"]}, status: 500}
+            end
+        end
         return {data: {message: "Order successfully synced"}, status: 200}
     end
 
