@@ -225,6 +225,10 @@ class LemonStandClient < ActiveRecord::Base
             if orderBotOrder[:status] != 200
                 return orderBotOrder
             end
+            response = updateOrderItemsStock(lemonStandOrder)
+            if response[:status] != 200
+                return response
+            end
         end
         return {data: {message: "Order successfully synced"}, status: 200}
     end

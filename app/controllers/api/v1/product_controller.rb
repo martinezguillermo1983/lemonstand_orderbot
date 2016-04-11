@@ -81,21 +81,25 @@ class Api::V1::ProductController < ApplicationController
         render :json => productClassesList, :status => 200
     end
 
-    def getProductsByCategory
+    def getProducts
         orderBotClient = OrderBotClient.getByClientCode(params[:client_code])
         if orderBotClient.nil?
             return render :json => {message: "Orderbot client not found"}, :status => 404
         end
-        products = orderBotClient.getProducts({category_name: params[:category_name]})
+        parameters = {}
+        if !params[:category_name].nil?
+            parameters[:category_name] = params[:category_name];
+        end
+        products = orderBotClient.getProducts(parameters)
         if products.nil?
             return {data: {message: "Orderbot's products not found"}, status: 404}
         end
         productsList = []
-        parents = orderBotProducts.select{|p| p["is_parent"]}end
-        parents.each do |parent|
+        products = products.select{|p| p["is_parent"]} if params[:only_parents]
+        products.each do |product|
             productsList.push({
-                name: parent["product_name"],
-                sku: parent["sku"],
+                name: product["product_name"],
+                sku: product["sku"],
                 })
         end
         render :json => productsList, :status => 200

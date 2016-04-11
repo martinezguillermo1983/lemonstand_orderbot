@@ -11,10 +11,13 @@
 // about supported directives.
 //
 //= require jquery
+//= require jquery.turbolinks
 //= require jquery_ujs
 //= require turbolinks
 //= require_tree .
+
 $(document).ready(function(){
+    var productsLoadRequest
     $.ajaxSetup({ cache: false });
     $("#order_bot_client").change(function(){
         if ($(this).val() == "") return;
@@ -26,7 +29,23 @@ $(document).ready(function(){
         loadProductCategories($(this).val())
     })
 
-    $("#order_bot_sync_products").click(function(){
+    // $("#order_bot_product_category").change(function(){
+    //     if ($(this).val() == "") return;
+    //     loadParentProducts($("#order_bot_product_category option[value="+$("#order_bot_product_category").val()+"]").text())
+    // })
+
+    $("#order_bot_load_products").click(function(){
+        if ($("#order_bot_product_category").val() == "") return;
+        loadParentProducts($("#order_bot_product_category option[value="+$("#order_bot_product_category").val()+"]").text())
+    })
+
+    $("#order_bot_sync_product").click(function(){
+        if ($("#order_bot_client").val() == "" || $("#order_bot_product_class").val() == "" || $("#order_bot_product_class").val() == "" || $("#order_bot_product_category").val() == "" || $("#order_bot_products").val() == "") return;
+        syncProducts($("#order_bot_client").val(), $("#order_bot_product_class option[value="+$("#order_bot_product_class").val()+"]").text(), $("#order_bot_product_category option[value="+$("#order_bot_product_category").val()+"]").text(), $("#order_bot_products").val())
+    })
+
+    $("#order_bot_sync_category").click(function(){
+        if ($("#order_bot_client").val() == "" || $("#order_bot_product_class").val() == "" || $("#order_bot_product_class").val() == "" || $("#order_bot_product_category").val() == "") return;
         syncProducts($("#order_bot_client").val(), $("#order_bot_product_class option[value="+$("#order_bot_product_class").val()+"]").text(), $("#order_bot_product_category option[value="+$("#order_bot_product_category").val()+"]").text())
     })
 
@@ -35,6 +54,13 @@ $(document).ready(function(){
             cache: false,
             url:  "/api/v1/productclasses",
             headers: {"Authorization": "Token "+orderBotClientId, "Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            beforeSend: function(xhr) {
+                if(typeof productsLoadRequest != 'undefined') productsLoadRequest.abort()        
+                $("#order_bot_product_class").find('option').remove()
+                $("#order_bot_product_class").append($("<option />").val('').text('Loading...'))
+                $("#order_bot_product_class").attr("disabled", true)
+                addLoadingGifAfter($("#title"))
+            },
             success: function(data) {
                 response = data[0];
                 var optionsClasses = $("#order_bot_product_class");
@@ -43,6 +69,7 @@ $(document).ready(function(){
                     optionsClasses.append($("<option />").val(this.id).text(this.name));
                 });
                 optionsClasses.attr("disabled", false)
+                $("#order_bot_product_category").trigger("click")
                 loadProductCategories(optionsClasses.val())
             }
         });        
@@ -53,6 +80,13 @@ $(document).ready(function(){
             cache: false,
             url:  "/api/v1/productclasses/"+productClassId+"/categories/",
             headers: {"Authorization": "Token "+$("#order_bot_client").val(), "Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            beforeSend: function(xhr) {
+                if(typeof productsLoadRequest != 'undefined') productsLoadRequest.abort()        
+                $("#order_bot_product_category").find('option').remove()
+                $("#order_bot_product_category").append($("<option />").val('').text('Loading...'))
+                $("#order_bot_product_category").attr("disabled", true)
+                addLoadingGifAfter($("#title"))
+            },
             success: function(data) {
                 response = data[0];
                 var optionsCategories = $("#order_bot_product_category");
@@ -61,14 +95,51 @@ $(document).ready(function(){
                     optionsCategories.append($("<option />").val(this.id).text(this.name));
                 });
                 optionsCategories.attr("disabled", false)
+                $("#loading_gif").remove()  
+                // loadParentProducts( $("#order_bot_product_category option[value="+$("#order_bot_product_category").val()+"]").text())
             }
         });         
     }
 
-    function syncProducts(orderBotClientId, productClassName, productCategoryName) {
+    function loadParentProducts(categoryName) {
+        productsLoadRequest = $.ajax({
+            cache: false,
+            url:  "/api/v1/products?category_name="+categoryName+"&only_parents=1",
+            headers: {"Authorization": "Token "+$("#order_bot_client").val(), "Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            beforeSend: function(xhr) {
+                if(typeof productsLoadRequest != 'undefined') productsLoadRequest.abort()        
+                $("#order_bot_products").find('option').remove()
+                $("#order_bot_products").append($("<option />").val('').text('Loading...'))
+                $("#order_bot_products").attr("disabled", true)
+                addLoadingGifAfter($("#title"))
+            },
+            success: function(data) {
+                data = data.sort(compare);        
+                var optionsProducts = $("#order_bot_products");
+                optionsProducts.find('option').remove()
+                $.each(data, function() {
+                    optionsProducts.append($("<option />").val(this.sku).text(this.sku+" - "+this.name));
+                });
+                optionsProducts.attr("disabled", false)
+                $("#loading_gif").remove()  
+            }
+        });         
+    }
+
+    function compare(a,b) {
+      if (a.name < b.name)
+        return -1;
+      else if (a.name > b.name)
+        return 1;
+      else 
+        return 0;
+    }
+
+    function syncProducts(orderBotClientId, productClassName, productCategoryName, productSku) {
         var data = {
             product_class_name: productClassName,
-            product_category_name: productCategoryName
+            product_category_name: productCategoryName,
+            product_sku: productSku || null
         }
         $.ajax({
             cache: false,
@@ -78,27 +149,28 @@ $(document).ready(function(){
             url:  "/api/v1/sync/products",
             headers: {"Authorization": "Token "+orderBotClientId, "Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
             beforeSend: function(xhr) {           
-                $("#order_bot_sync_products").attr("value", "Syncing...")
-                $("#order_bot_sync_products").attr("disabled", true)
-                addLoadingGifAfter($("#order_bot_sync_products"))
+                $("#order_bot_sync_product").attr("disabled", true)
+                $("#order_bot_sync_category").attr("disabled", true)
+                addLoadingGifAfter($("#title"))
 
             },
             error: function(data, textStatus, errorThrown) {
                 alert(data.responseJSON.message);
-                $("#order_bot_sync_products").attr("value", "Sync Products")
-                $("#order_bot_sync_products").attr("disabled", false)
+                $("#order_bot_sync_product").attr("disabled", false)
+                $("#order_bot_sync_category").attr("disabled", false)
                 $("#loading_gif").remove()  
             },
             success: function(data) { 
                 alert("Success: " + data.message)
-                $("#order_bot_sync_products").attr("value", "Sync Products")
-                $("#order_bot_sync_products").attr("disabled", false)
+                $("#order_bot_sync_product").attr("disabled", false)
+                $("#order_bot_sync_category").attr("disabled", false)
                 $("#loading_gif").remove()  
             }
         });        
     }
 
     function addLoadingGifAfter(element) {
+        $("#loading_gif").remove() 
         $('<img id="loading_gif" class="loading" src="/loading.gif" width="18px" height="18px">').insertAfter(element);
     }
 

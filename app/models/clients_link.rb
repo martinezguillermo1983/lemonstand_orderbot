@@ -327,20 +327,28 @@ class ClientsLink < ActiveRecord::Base
             customerMapping.setCustomerShippingMapping(lemonStandShippingAddressId, createdOrderBotOrder["customer_id"])
         end
         self.setOrderMapping(lemonStandOrder, pushedOrder)
-        # Update inventory amounts
-        lemonStandItems.each do |item|
+        return {data: {message: "Order successfully synced"}, status: 200}
+    end
+
+    def updateOrderItemsStock(lemonStandOrder)
+        orderBotClient = self.order_bot_client
+        # Update inventory amounts from LemonStand order
+        lemonStandOrder["items"]["data"].each do |item|
             orderBotProduct = orderBotClient.getProducts({product_sku: item["sku"]})
             if !orderBotProduct.first
-                return {data: {message: "Error updating product stock for sku "+item["sku"]}, status: 500}
+                return {data: {message: "Error updating product stock for sku "+item["sku"]+" after updating LemonStand order id "+lemonStandOrder["id"].to_s+". Product not found."}, status: 500}
             end
             # Get and set inventory amount
             distributionCenter = orderBotProduct.first["inventory_quantities"].detect{|dc| dc["distribution_center_id"] == self.order_bot_distribution_center_id}
-            response = lemonStandClient.patchProduct(item["sku"], {in_stock_amount: distributionCenter["inventory_quantity"]})            
-            if !response
-                return {data: {message: "Error updating product stock for sku "+item["sku"]}, status: 500}
+            orderBotClient.clients_links.each do |clientLink|
+                lemonStandClient = clientLink.lemon_stand_client
+                response = lemonStandClient.patchProduct(item["sku"], {in_stock_amount: distributionCenter["inventory_quantity"]})            
+                if !response
+                    return {data: {message: "Error updating product stock for sku "+item["sku"]+" after updating LemonStand order id "+lemonStandOrder["id"].to_s}, status: 500}
+                end                
             end
         end
-        return {data: {message: "Order successfully synced"}, status: 200}
+        return {data: {message: "Items stock successfully updated"}, status: 200}
     end
 
     def calculateTaxes(taxes, shippingAddress, price)

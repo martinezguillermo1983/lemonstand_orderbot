@@ -15,7 +15,7 @@ Rails.application.routes.draw do
     namespace :v1 do
       get 'productclasses/'  => 'product#getProductClasses'
       get 'productclasses/:product_class_id/categories/'  => 'product#getProductCategoriesByProductClass'
-      get 'productclasses/:product_class_id/categories/:category_name'  => 'product#getProductsByCategory'
+      get 'products'  => 'product#getProducts'
       post 'stockcheck/:client_code'  => 'order#stockCheck'
       
       post 'sync/products'  => 'product#sync'
