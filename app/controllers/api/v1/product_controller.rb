@@ -1,4 +1,4 @@
-class Api::V1::ProductController < ApplicationController
+class Api::V1::ProductController < Api::V1::ApiController
     skip_before_filter :verify_authenticity_token  
     before_filter :authenticate_orderbot
 
@@ -6,28 +6,25 @@ class Api::V1::ProductController < ApplicationController
         # Get orderbot client
         orderBotClient = OrderBotClient.getByClientCode(params[:client_code])
         if orderBotClient.nil?
-            return render :json => {message: "Orderbot client not found"}, :status => 404
+            raise ActiveRecord::RecordNotFound, "Invalid client_code"
         end
-        response = orderBotClient.pushProductStructure
-        if response[:status] != 200
-            return render :json => response[:data], :status => response[:status]
-        end
+        orderBotClient.pushProductStructure
         if !params[:product_sku].nil?
             response = orderBotClient.pushProductBySku(params[:product_sku], params[:product_class_name],params[:product_category_name])
         else
             response = orderBotClient.pushProductsByTypeAndCategory(params[:product_class_name],params[:product_category_name])
         end
-        return render :json => response[:data], :status => response[:status]
+        return render :json => response, :status => response[:status]
     end
 
     def getProductCategoriesByProductClass
         orderBotClient = OrderBotClient.getByClientCode(params[:client_code])
         if orderBotClient.nil?
-            return render :json => {message: "Orderbot client not found"}, :status => 404
+            raise ActiveRecord::RecordNotFound, "Invalid client_code"
         end
         productStructure = orderBotClient.getProductStructure
         if productStructure.nil?
-            return {data: {message: "Orderbot's product structure not found"}, status: 404}
+            raise ActiveRecord::RecordNotFound, "Product structure not found"
         end
         # Parse orderbot categories and groups
         classTypeIndex = nil
@@ -55,11 +52,11 @@ class Api::V1::ProductController < ApplicationController
     def getProductClasses
         orderBotClient = OrderBotClient.getByClientCode(params[:client_code])
         if orderBotClient.nil?
-            return render :json => {message: "Orderbot client not found"}, :status => 404
+            raise ActiveRecord::RecordNotFound, "Invalid client_code"
         end
         productStructure = orderBotClient.getProductStructure
         if productStructure.nil?
-            return {data: {message: "Orderbot's product structure not found"}, status: 404}
+            raise ActiveRecord::RecordNotFound, "Product structure not found"
         end
         # Parse orderbot categories and groups
         classTypeIndex = nil
@@ -84,7 +81,7 @@ class Api::V1::ProductController < ApplicationController
     def getProducts
         orderBotClient = OrderBotClient.getByClientCode(params[:client_code])
         if orderBotClient.nil?
-            return render :json => {message: "Orderbot client not found"}, :status => 404
+            raise ActiveRecord::RecordNotFound, "Invalid client_code"
         end
         parameters = {}
         if !params[:category_name].nil?
@@ -92,7 +89,7 @@ class Api::V1::ProductController < ApplicationController
         end
         products = orderBotClient.getProducts(parameters)
         if products.nil?
-            return {data: {message: "Orderbot's products not found"}, status: 404}
+            raise ActiveRecord::RecordNotFound, "Orderbot's products not found"
         end
         productsList = []
         products = products.select{|p| p["is_parent"]} if params[:only_parents]

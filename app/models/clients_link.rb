@@ -79,11 +79,11 @@ class ClientsLink < ActiveRecord::Base
         orderBotClient = self.order_bot_client
         states = orderBotClient.getStates
         if !states
-            return {data: {message: "States list not found."}, status: 404}
+            raise ActiveRecord::RecordNotFound, "States list not found."
         end   
         countries = orderBotClient.getCountries
         if !countries
-            return {data: {message: "Countries list not found."}, status: 404}
+            raise ActiveRecord::RecordNotFound, "Countries list not found."
         end  
         lemonStandBillingAddress = lemonStandCustomer["billing_addresses"]["data"].first
         lemonStandShippingAddresses = lemonStandCustomer["shipping_addresses"]["data"]
@@ -128,7 +128,8 @@ class ClientsLink < ActiveRecord::Base
                 }                    
             })
         end
-        return {data: orderBotCustomer, status: 200}
+        # return {data: orderBotCustomer, status: 200}
+        orderBotCustomer
     end
 
     def mapOrder(lemonStandOrder)
@@ -136,11 +137,11 @@ class ClientsLink < ActiveRecord::Base
         orderBotClient = self.order_bot_client
         states = orderBotClient.getStates
         if !states
-            return {data: {message: "States list not found."}, status: 404}
+            raise ActiveRecord::RecordNotFound, "States list not found."
         end  
         countries = orderBotClient.getCountries
         if !countries
-            return {data: {message: "Countries list not found."}, status: 404}
+            raise ActiveRecord::RecordNotFound, "Countries list not found."
         end  
         orderStatus = '';
         case lemonStandOrder["status"] 
@@ -163,7 +164,7 @@ class ClientsLink < ActiveRecord::Base
         lemonStandBillingAddress = lemonStandPayments.first["billing_address"]["data"]
         lemonStandTaxClasses = lemonStandClient.getTaxClasses({embed:"rates"})
         if !lemonStandTaxClasses
-            return {data: {message: "LemonStand default Tax Class not found."}, status: 404}
+            raise ActiveRecord::RecordNotFound, "LemonStand default Tax Class not found."
         end
         lemonStandDefaultTaxClass = nil
         lemonStandTaxClasses.each do |taxClass|
@@ -174,12 +175,12 @@ class ClientsLink < ActiveRecord::Base
         end
         # Map customer ids
         mappedOrderBotCustomer = self.mapCustomer(lemonStandCustomer)
-        if mappedOrderBotCustomer[:status] != 200
-            return {data: {message: "Error mapping customer id "+lemonStandCustomer["id"].to_s}, status: 500}
+        if !mappedOrderBotCustomer
+            raise "Error mapping customer id "+lemonStandCustomer["id"].to_s
         end
         orderBotAccountId = self.mapCustomerId(lemonStandCustomer["id"])
         if orderBotAccountId.nil?
-            orderBotCustomer = orderBotClient.postCustomer(mappedOrderBotCustomer[:data])
+            orderBotCustomer = orderBotClient.postCustomer(mappedOrderBotCustomer)
             orderBotAccountId = orderBotCustomer.first["orderbot_account_id"]
             self.setCustomerMapping(lemonStandCustomer, orderBotCustomer.first)
         end
@@ -305,13 +306,13 @@ class ClientsLink < ActiveRecord::Base
         if orderBotOrderId.nil? 
             pushedOrder = self.order_bot_client.postOrder(orderBotOrder)
             if !pushedOrder
-                return {data: {message: "Error syncing order id "+lemonStandOrder["id"].to_s+" to Orderbot's client "+self.order_bot_client.company_name}, status: 500}
+                raise "Error syncing order id "+lemonStandOrder["id"].to_s+" to Orderbot's client "+self.order_bot_client.company_name
             end
             orderBotOrderId = pushedOrder["order_process_result"].first["orderbot_order_id"]
         else
             pushedOrder = self.order_bot_client.putOrder(orderBotOrderId, orderBotOrder)
             if !pushedOrder
-                return {data: {message: "Error syncing order id "+lemonStandOrder["id"].to_s+" to Orderbot's client "+self.order_bot_client.company_name}, status: 500}
+                raise "Error syncing order id "+lemonStandOrder["id"].to_s+" to Orderbot's client "+self.order_bot_client.company_name
             end
             orderBotOrderId = pushedOrder["orderbot_order_id"]
         end
@@ -327,7 +328,7 @@ class ClientsLink < ActiveRecord::Base
             customerMapping.setCustomerShippingMapping(lemonStandShippingAddressId, createdOrderBotOrder["customer_id"])
         end
         self.setOrderMapping(lemonStandOrder, pushedOrder)
-        return {data: {message: "Order successfully synced"}, status: 200}
+        true
     end
 
     def updateOrderItemsStock(lemonStandOrder)
@@ -336,19 +337,23 @@ class ClientsLink < ActiveRecord::Base
         lemonStandOrder["items"]["data"].each do |item|
             orderBotProduct = orderBotClient.getProducts({product_sku: item["sku"]})
             if !orderBotProduct.first
-                return {data: {message: "Error updating product stock for sku "+item["sku"]+" after updating LemonStand order id "+lemonStandOrder["id"].to_s+". Product not found."}, status: 500}
+                raise "Error updating product stock for sku "+item["sku"]+" after updating LemonStand order id "+lemonStandOrder["id"].to_s+". Product not found."
             end
             # Get and set inventory amount
             distributionCenter = orderBotProduct.first["inventory_quantities"].detect{|dc| dc["distribution_center_id"] == self.order_bot_distribution_center_id}
             orderBotClient.clients_links.each do |clientLink|
                 lemonStandClient = clientLink.lemon_stand_client
-                response = lemonStandClient.patchProduct(item["sku"], {in_stock_amount: distributionCenter["inventory_quantity"]})            
+                variant = lemonStandClient.getVariant(item["sku"])
+                if !variant
+                    raise "Error updating product stock for sku "+item["sku"]+" after updating LemonStand order id "+lemonStandOrder["id"].to_s
+                end                  
+                response = lemonStandClient.patchProductVariant(variant["shop_product_id"], variant["id"], {in_stock_amount: distributionCenter["inventory_quantity"]})  
                 if !response
-                    return {data: {message: "Error updating product stock for sku "+item["sku"]+" after updating LemonStand order id "+lemonStandOrder["id"].to_s}, status: 500}
+                    raise "Error updating product stock for sku "+item["sku"]+" after updating LemonStand order id "+lemonStandOrder["id"].to_s
                 end                
             end
         end
-        return {data: {message: "Items stock successfully updated"}, status: 200}
+        true
     end
 
     def calculateTaxes(taxes, shippingAddress, price)

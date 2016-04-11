@@ -50,12 +50,12 @@ class LemonStandClient < ActiveRecord::Base
             :body => body.to_json,
             :headers => headers
         )
-        if response["meta"]["success"]
-            response = response["data"]
-        else
-            response = false
-        end
-        response
+        # if response["meta"]["success"]
+        #     response = response["data"]
+        # else
+        #     response = false
+        # end
+        # response
     end
 
     def httpDelete(uri)
@@ -143,6 +143,10 @@ class LemonStandClient < ActiveRecord::Base
         httpPatch("product/"+product_id.to_s+"/variant/"+variant_id.to_s, variant)
     end
 
+    def getVariant(variant_id,params={})
+        httpGet("variant/"+variant_id.to_s, params)
+    end  
+
     def postProductCategory(product_id, category)
         httpPost("product/"+product_id.to_s+"/categories/", category)
     end      
@@ -217,20 +221,14 @@ class LemonStandClient < ActiveRecord::Base
         parameters = {:embed => "customer.shipping_addresses,customer.billing_addresses,items,items.product,items.product.variants,items.product.tax.rates,invoices.billing_address,invoices.shipments,invoices.shipments.shipping_address,invoices.shipments.billing_address,invoices.shipments.shipping_method.tax.rates,invoices.payments.transactions,invoices.payments.attempts.payment_methods,invoices.payments.billing_address"}
         lemonStandOrder = self.getOrder(order_id, parameters)
         if lemonStandOrder.nil?
-            return {data: {message: "LemonStand order not found."}, status: 404}
+            raise ActiveRecord::RecordNotFound, "LemonStand order not found."
         end
         orderBotOrder = nil
         self.clients_links.each do |clientLink|
-            orderBotOrder = clientLink.mapOrder(lemonStandOrder)
-            if orderBotOrder[:status] != 200
-                return orderBotOrder
-            end
-            response = updateOrderItemsStock(lemonStandOrder)
-            if response[:status] != 200
-                return response
-            end
+            clientLink.mapOrder(lemonStandOrder)
+            clientLink.updateOrderItemsStock(lemonStandOrder)
         end
-        return {data: {message: "Order successfully synced"}, status: 200}
+        true
     end
 
 end
