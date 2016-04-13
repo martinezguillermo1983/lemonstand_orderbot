@@ -23,8 +23,16 @@ class Api::V1::ApiController < ActionController::Base
     def authenticate_orderbot
         authenticate_or_request_with_http_token do |token, options|
             params[:client_code] = token
-            OrderBotClient.exists?(client_code: token)
+            response = OrderBotClient.exists?(client_code: token)
+            if response
+              orderBotClient = OrderBotClient.getByClientCode(params[:client_code])
+              if orderBotClient.nil?
+                  raise ActiveRecord::RecordNotFound, "Invalid client_code"
+              end
+              params[:order_bot_client] = orderBotClient
+            end
         end
+        response
     end
 
     private

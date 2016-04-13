@@ -10,15 +10,19 @@ Rails.application.routes.draw do
   get     'logout'          => 'sessions#destroy'
 
   get     'products'        => 'sync#products' 
+  get     'setup'           => 'setup#show'
 
+  get 'orderbotclient/:client_code/clientslinks' => 'clients_link#getOrderBotClientsLinks'
+  get 'orderbotclient/:client_code/clientslinks/options' => 'clients_link#getOptions'
+  put 'clientslinks/:clients_link_id' => 'clients_link#updateClientsLink'
+
+  get 'orderbotclient/:client_code/productclasses/'  => 'product#getProductClasses'
+  get 'orderbotclient/:client_code/productclasses/:product_class_id/categories/'  => 'product#getProductCategoriesByProductClass'
+  get 'orderbotclient/:client_code/products'  => 'product#getProducts' 
+  post 'orderbotclient/:client_code/sync/products'  => 'product#sync'
   namespace :api do
     namespace :v1 do
-      get 'productclasses/'  => 'product#getProductClasses'
-      get 'productclasses/:product_class_id/categories/'  => 'product#getProductCategoriesByProductClass'
-      get 'products'  => 'product#getProducts'
       post 'stockcheck/:client_code'  => 'order#stockCheck'
-      
-      post 'sync/products'  => 'product#sync'
       post 'sync/order/:client_code'     => 'order#sync'
       post 'sync/customer/:client_code'  => 'customer#sync'
     end

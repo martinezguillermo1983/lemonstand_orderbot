@@ -50,12 +50,12 @@ class LemonStandClient < ActiveRecord::Base
             :body => body.to_json,
             :headers => headers
         )
-        # if response["meta"]["success"]
-        #     response = response["data"]
-        # else
-        #     response = false
-        # end
-        # response
+        if response["meta"]["success"]
+            response = response["data"]
+        else
+            response = false
+        end
+        response
     end
 
     def httpDelete(uri)

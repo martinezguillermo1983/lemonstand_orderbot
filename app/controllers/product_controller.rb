@@ -1,6 +1,6 @@
-class Api::V1::ProductController < Api::V1::ApiController
-    skip_before_filter :verify_authenticity_token  
-    before_filter :authenticate_orderbot
+class ProductController < ApplicationController
+    # skip_before_filter :verify_authenticity_token  
+    # before_filter :authenticate_orderbot
 
     def sync
         # Get orderbot client
@@ -14,14 +14,15 @@ class Api::V1::ProductController < Api::V1::ApiController
         else
             response = orderBotClient.pushProductsByTypeAndCategory(params[:product_class_name],params[:product_category_name])
         end
-        return render :json => response, :status => response[:status]
+        return render :json => response, :status => 200
     end
 
     def getProductCategoriesByProductClass
+        # Get orderbot client
         orderBotClient = OrderBotClient.getByClientCode(params[:client_code])
         if orderBotClient.nil?
             raise ActiveRecord::RecordNotFound, "Invalid client_code"
-        end
+        end        
         productStructure = orderBotClient.getProductStructure
         if productStructure.nil?
             raise ActiveRecord::RecordNotFound, "Product structure not found"
@@ -50,10 +51,11 @@ class Api::V1::ProductController < Api::V1::ApiController
     end
 
     def getProductClasses
+        # Get orderbot client
         orderBotClient = OrderBotClient.getByClientCode(params[:client_code])
         if orderBotClient.nil?
             raise ActiveRecord::RecordNotFound, "Invalid client_code"
-        end
+        end        
         productStructure = orderBotClient.getProductStructure
         if productStructure.nil?
             raise ActiveRecord::RecordNotFound, "Product structure not found"
@@ -79,10 +81,11 @@ class Api::V1::ProductController < Api::V1::ApiController
     end
 
     def getProducts
+        # Get orderbot client
         orderBotClient = OrderBotClient.getByClientCode(params[:client_code])
         if orderBotClient.nil?
             raise ActiveRecord::RecordNotFound, "Invalid client_code"
-        end
+        end        
         parameters = {}
         if !params[:category_name].nil?
             parameters[:category_name] = params[:category_name];

@@ -14,62 +14,251 @@
 //= require jquery.turbolinks
 //= require jquery_ujs
 //= require turbolinks
-//= require_tree .
+// = require_tree .
 
 $(document).ready(function(){
+    //// SETUP
+    var orderBotClient
+    var orderBotOptions
+    var orderBotOptionsRequest
+    $("#setup_order_bot_client").change(function(){
+        if ($(this).val() == "") return;
+        loadOrderBotOptions($(this).val())
+    })
+
+    $("#setup_lemon_stand_client").change(function(){
+        if ($(this).val() == "") return;
+        loadClientLink(orderBotClient, orderBotOptions)
+    })
+
+    $("#setup_order_bot_sales_channel").change(function(){
+        if ($(this).val() == "") return;
+        loadOrderGuides(orderBotOptions.order_guides)
+        loadAccountGroups(orderBotOptions.account_groups)
+    })
+
+    $("#setup_clients_link_save").click(function(){
+        var clientsLink = {
+            order_bot_sales_channel_id: parseInt($("#setup_order_bot_sales_channel").val()),
+            order_bot_sales_channel_name: $("#setup_order_bot_sales_channel option[value='"+$("#setup_order_bot_sales_channel").val()+"']").text(),
+            order_bot_order_guide_id: parseInt($("#setup_order_bot_order_guide").val()),
+            order_bot_order_guide_name: $("#setup_order_bot_order_guide option[value='"+$("#setup_order_bot_order_guide").val()+"']").text(),
+            order_bot_account_group_id: parseInt($("#setup_order_bot_account_group").val()),
+            order_bot_account_group_name: $("#setup_order_bot_account_group option[value='"+$("#setup_order_bot_account_group").val()+"']").text(),
+            order_bot_distribution_center_id: parseInt($("#setup_order_bot_dc").val()),
+            order_bot_distribution_center_name: $("#setup_order_bot_dc option[value='"+$("#setup_order_bot_dc").val()+"']").text(),
+            order_bot_website_id: parseInt($("#setup_order_bot_website").val()),
+            order_bot_website_name: $("#setup_order_bot_website option[value='"+$("#setup_order_bot_website").val()+"']").text()
+        }
+        updateClientsLink($("#clients_link_id").val(), clientsLink)
+    })
+
+    function loadClientLinks(orderBotClientId, orderBotOptions) {
+        $.ajax({
+            cache: false,
+            url:  "/orderbotclient/"+orderBotClientId+"/clientslinks",
+            headers: {"Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            beforeSend: function(xhr) {
+                addLoadingGifAfter($("#title"))
+                $("#setup_lemon_stand_client").attr("disabled", true)
+            },
+            success: function(data) {
+                console.log(data)
+                orderBotClient = data
+                $("#loading_gif").remove()  
+                var optionsClients = $("#setup_lemon_stand_client");
+                optionsClients.find('option').remove()
+                optionsClients.append($("<option />").val("").text(""))
+                $.each(data.clients_links, function() {
+                    optionsClients.append($("<option />").val(this.lemon_stand_client.id).text(this.lemon_stand_client.company_name));
+                });
+                optionsClients.attr("disabled", false)
+            }
+        });        
+    }
+
+    function loadOrderBotOptions(orderBotClientId) {
+        orderBotOptionsRequest = $.ajax({
+            cache: false,
+            url:  "/orderbotclient/"+orderBotClientId+"/clientslinks/options",
+            headers: {"Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            beforeSend: function(xhr) {
+                if(typeof orderBotOptionsRequest != 'undefined') orderBotOptionsRequest.abort()  
+                addLoadingGifAfter($("#title"))
+                $("#setup_order_bot_sales_channel").attr("disabled", true)
+                $("#setup_order_bot_order_guide").attr("disabled", true)
+                $("#setup_order_bot_account_group").attr("disabled", true)
+                $("#setup_order_bot_dc").attr("disabled", true)
+                $("#setup_order_bot_website").attr("disabled", true)
+                $("#setup_clients_link_save").attr("disabled", true)
+            },
+            success: function(data) {
+                orderBotOptions = data
+                $("#loading_gif").remove()
+                loadClientLinks($("#setup_order_bot_client").val(), orderBotOptions)
+                console.log(orderBotOptions) 
+            }
+        });        
+    }
+
+    function loadSalesChannels(options, selected=null) {
+        var optionsSalesChannel = $("#setup_order_bot_sales_channel");
+        optionsSalesChannel.find('option').remove()
+        if (selected == null) optionsSalesChannel.append($("<option />").val("").text(""))
+        $.each(options, function() {
+            optionsSalesChannel.append($("<option />").val(this.sales_channel_id).text(this.sales_channel_name));
+        });
+        if (selected != null) optionsSalesChannel.val(selected)
+        optionsSalesChannel.attr("disabled", false)        
+    }
+
+    function loadOrderGuides(options, selected=null) {
+        var optionsSalesChannel = $("#setup_order_bot_sales_channel");
+        var optionsOrderGuide = $("#setup_order_bot_order_guide");
+        optionsOrderGuide.find('option').remove()
+        if (selected == null) optionsOrderGuide.append($("<option />").val("").text(""))
+        $.each(options, function() {
+            if (this.sales_channel_id == optionsSalesChannel.val()) {
+                optionsOrderGuide.append($("<option />").val(this.order_guide_id).text(this.order_guide_name));
+            }
+        });
+        if (selected != null) optionsOrderGuide.val(selected)
+        optionsOrderGuide.attr("disabled", false)        
+    }
+
+    function loadAccountGroups(options, selected=null) {
+        var optionsSalesChannel = $("#setup_order_bot_sales_channel");
+        var optionsAccountGroup = $("#setup_order_bot_account_group");
+        optionsAccountGroup.find('option').remove()
+        if (selected == null) optionsAccountGroup.append($("<option />").val("").text(""))
+        $.each(options, function() {
+            if (this.sales_channel_id == optionsSalesChannel.val()) {
+                $.each(this.account_groups, function() {
+                    optionsAccountGroup.append($("<option />").val(this.account_group_id).text(this.account_group_name));
+                })
+            }
+        });
+        if (selected != null) optionsAccountGroup.val(selected)
+        optionsAccountGroup.attr("disabled", false)        
+    }
+
+    function loadDistributionCenters(options, selected=null) {
+        var optionsSalesChannel = $("#setup_order_bot_sales_channel");
+        var optionsDC = $("#setup_order_bot_dc");
+        optionsDC.find('option').remove()
+        if (selected == null) optionsDC.append($("<option />").val("").text(""))
+        $.each(options, function() {
+            optionsDC.append($("<option />").val(this.distribution_center_id).text(this.distribution_center_name));
+        });
+        if (selected != null) optionsDC.val(selected)
+        optionsDC.attr("disabled", false)       
+    }
+
+    function loadWebsites(options, selected=null) {
+        var optionsSalesChannel = $("#setup_order_bot_sales_channel");
+        var optionsWebsite = $("#setup_order_bot_website");
+        optionsWebsite.find('option').remove()
+        if (selected == null) optionsWebsite.append($("<option />").val("").text(""))
+        $.each(options, function() {
+            optionsWebsite.append($("<option />").val(this.Website_Id).text(this.website_name));
+        });
+        if (selected != null) optionsWebsite.val(selected)
+        optionsWebsite.attr("disabled", false)     
+    }
+
+    function loadClientLink(orderBotClient, orderBotOptions) {
+        var optionsClients = $("#setup_lemon_stand_client");
+        clientLink = $.grep(orderBotClient.clients_links, function(c){ return c.lemon_stand_client_id == optionsClients.val(); });
+        if (clientLink[0] != undefined) {
+            clientLink = clientLink[0]
+        }
+        $("#clients_link_id").val(clientLink.id)
+        loadSalesChannels(orderBotOptions.sales_channels, clientLink.order_bot_sales_channel_id)
+        loadOrderGuides(orderBotOptions.order_guides, clientLink.order_bot_order_guide_id)
+        loadAccountGroups(orderBotOptions.account_groups, clientLink.order_bot_account_group_id)
+        loadDistributionCenters(orderBotOptions.distribution_centers, clientLink.order_bot_distribution_center_id)
+        loadWebsites(orderBotOptions.websites, clientLink.order_bot_website_id)
+        $("#setup_clients_link_save").attr("disabled", false)
+    }
+
+    function updateClientsLink(clientsLinkId, clientsLink) {
+        $.ajax({
+            cache: false,
+            type: "PUT",
+            data: JSON.stringify(clientsLink),
+            contentType: "application/json",
+            url:  "/clientslinks/"+clientsLinkId,
+            headers: {"Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            beforeSend: function(xhr) {
+                addLoadingGifAfter($("#title"))
+                $("#setup_clients_link_save").attr("disabled", true)
+            },
+            error: function(data) {
+                $("#loading_gif").remove()
+                alert(data.responseText)
+                $("#setup_clients_link_save").attr("disabled", false)
+            },
+            success: function(data) {
+                $("#loading_gif").remove()
+                alert("Clients link succesfully updated.")
+                $("#setup_clients_link_save").attr("disabled", false)
+           }
+        });                
+    }
+
+    //// SYNC PRODUCTS
+
     var productsLoadRequest
-    $.ajaxSetup({ cache: false });
-    $("#order_bot_client").change(function(){
+    $("#sync_products_order_bot_client").change(function(){
         if ($(this).val() == "") return;
         loadProductClasses($(this).val())
     })
 
-    $("#order_bot_product_class").change(function(){
+    $("#sync_products_order_bot_product_class").change(function(){
         if ($(this).val() == "") return;
         loadProductCategories($(this).val())
     })
 
-    // $("#order_bot_product_category").change(function(){
+    // $("#sync_products_order_bot_product_category").change(function(){
     //     if ($(this).val() == "") return;
-    //     loadParentProducts($("#order_bot_product_category option[value="+$("#order_bot_product_category").val()+"]").text())
+    //     loadParentProducts($("#sync_products_order_bot_product_category option[value='"+$("#sync_products_order_bot_product_category").val()+"']").text())
     // })
 
-    $("#order_bot_load_products").click(function(){
-        if ($("#order_bot_product_category").val() == "") return;
-        loadParentProducts($("#order_bot_product_category option[value="+$("#order_bot_product_category").val()+"]").text())
+    $("#sync_products_order_bot_load_products").click(function(){
+        if ($("#sync_products_order_bot_product_category").val() == "") return;
+        loadParentProducts($("#sync_products_order_bot_product_category option[value='"+$("#sync_products_order_bot_product_category").val()+"']").text())
     })
 
-    $("#order_bot_sync_product").click(function(){
-        if ($("#order_bot_client").val() == "" || $("#order_bot_product_class").val() == "" || $("#order_bot_product_class").val() == "" || $("#order_bot_product_category").val() == "" || $("#order_bot_products").val() == "") return;
-        syncProducts($("#order_bot_client").val(), $("#order_bot_product_class option[value="+$("#order_bot_product_class").val()+"]").text(), $("#order_bot_product_category option[value="+$("#order_bot_product_category").val()+"]").text(), $("#order_bot_products").val())
+    $("#sync_products_order_bot_sync_product").click(function(){
+        if ($("#vclient").val() == "" || $("#sync_products_order_bot_product_class").val() == "" || $("#sync_products_order_bot_product_class").val() == "" || $("#sync_products_order_bot_product_category").val() == "" || $("#sync_products_order_bot_products").val() == "") return;
+        syncProducts($("#sync_products_order_bot_client").val(), $("#sync_products_order_bot_product_class option[value='"+$("#sync_products_order_bot_product_class").val()+"']").text(), $("#sync_products_order_bot_product_category option[value='"+$("#sync_products_order_bot_product_category").val()+"']").text(), $("#sync_products_order_bot_products").val())
     })
 
-    $("#order_bot_sync_category").click(function(){
-        if ($("#order_bot_client").val() == "" || $("#order_bot_product_class").val() == "" || $("#order_bot_product_class").val() == "" || $("#order_bot_product_category").val() == "") return;
-        syncProducts($("#order_bot_client").val(), $("#order_bot_product_class option[value="+$("#order_bot_product_class").val()+"]").text(), $("#order_bot_product_category option[value="+$("#order_bot_product_category").val()+"]").text())
+    $("#sync_products_order_bot_sync_category").click(function(){
+        if ($("#sync_products_order_bot_client").val() == "" || $("#sync_products_order_bot_product_class").val() == "" || $("#sync_products_order_bot_product_class").val() == "" || $("#sync_products_order_bot_product_category").val() == "") return;
+        syncProducts($("#sync_products_order_bot_client").val(), $("#sync_products_order_bot_product_class option[value='"+$("#sync_products_order_bot_product_class").val()+"']").text(), $("#sync_products_order_bot_product_category option[value='"+$("#sync_products_order_bot_product_category").val()+"']").text())
     })
 
     function loadProductClasses(orderBotClientId) {
         $.ajax({
             cache: false,
-            url:  "/api/v1/productclasses",
-            headers: {"Authorization": "Token "+orderBotClientId, "Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            url:  "/orderbotclient/"+orderBotClientId+"/productclasses",
+            headers: {"Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
             beforeSend: function(xhr) {
                 if(typeof productsLoadRequest != 'undefined') productsLoadRequest.abort()        
-                $("#order_bot_product_class").find('option').remove()
-                $("#order_bot_product_class").append($("<option />").val('').text('Loading...'))
-                $("#order_bot_product_class").attr("disabled", true)
+                $("#sync_products_order_bot_product_class").find('option').remove()
+                $("#sync_products_order_bot_product_class").append($("<option />").val('').text('Loading...'))
+                $("#sync_products_order_bot_product_class").attr("disabled", true)
                 addLoadingGifAfter($("#title"))
             },
             success: function(data) {
-                response = data[0];
-                var optionsClasses = $("#order_bot_product_class");
+                $("#loading_gif").remove()  
+                var optionsClasses = $("#sync_products_order_bot_product_class");
                 optionsClasses.find('option').remove()
                 $.each(data, function() {
                     optionsClasses.append($("<option />").val(this.id).text(this.name));
                 });
                 optionsClasses.attr("disabled", false)
-                $("#order_bot_product_category").trigger("click")
                 loadProductCategories(optionsClasses.val())
             }
         });        
@@ -78,25 +267,24 @@ $(document).ready(function(){
     function loadProductCategories(productClassId) {
         $.ajax({
             cache: false,
-            url:  "/api/v1/productclasses/"+productClassId+"/categories/",
-            headers: {"Authorization": "Token "+$("#order_bot_client").val(), "Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            url:  "/orderbotclient/"+$("#sync_products_order_bot_client").val()+"/productclasses/"+productClassId+"/categories/",
+            headers: {"Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
             beforeSend: function(xhr) {
                 if(typeof productsLoadRequest != 'undefined') productsLoadRequest.abort()        
-                $("#order_bot_product_category").find('option').remove()
-                $("#order_bot_product_category").append($("<option />").val('').text('Loading...'))
-                $("#order_bot_product_category").attr("disabled", true)
+                $("#sync_products_order_bot_product_category").find('option').remove()
+                $("#sync_products_order_bot_product_category").append($("<option />").val('').text('Loading...'))
+                $("#sync_products_order_bot_product_category").attr("disabled", true)
                 addLoadingGifAfter($("#title"))
             },
             success: function(data) {
-                response = data[0];
-                var optionsCategories = $("#order_bot_product_category");
+                $("#loading_gif").remove()  
+                var optionsCategories = $("#sync_products_order_bot_product_category");
                 optionsCategories.find('option').remove()
                 $.each(data, function() {
                     optionsCategories.append($("<option />").val(this.id).text(this.name));
                 });
                 optionsCategories.attr("disabled", false)
                 $("#loading_gif").remove()  
-                // loadParentProducts( $("#order_bot_product_category option[value="+$("#order_bot_product_category").val()+"]").text())
             }
         });         
     }
@@ -104,36 +292,28 @@ $(document).ready(function(){
     function loadParentProducts(categoryName) {
         productsLoadRequest = $.ajax({
             cache: false,
-            url:  "/api/v1/products?category_name="+categoryName+"&only_parents=1",
-            headers: {"Authorization": "Token "+$("#order_bot_client").val(), "Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            url:  "/orderbotclient/"+$("#sync_products_order_bot_client").val()+"/products?category_name="+categoryName+"&only_parents=1",
+            headers: {"Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
             beforeSend: function(xhr) {
                 if(typeof productsLoadRequest != 'undefined') productsLoadRequest.abort()        
-                $("#order_bot_products").find('option').remove()
-                $("#order_bot_products").append($("<option />").val('').text('Loading...'))
-                $("#order_bot_products").attr("disabled", true)
+                $("#sync_products_order_bot_products").find('option').remove()
+                $("#sync_products_order_bot_products").append($("<option />").val('').text('Loading...'))
+                $("#sync_products_order_bot_products").attr("disabled", true)
                 addLoadingGifAfter($("#title"))
             },
             success: function(data) {
+                $("#loading_gif").remove()  
                 data = data.sort(compare);        
-                var optionsProducts = $("#order_bot_products");
+                var optionsProducts = $("#sync_products_order_bot_products");
                 optionsProducts.find('option').remove()
                 $.each(data, function() {
                     optionsProducts.append($("<option />").val(this.sku).text(this.sku+" - "+this.name));
                 });
                 optionsProducts.attr("disabled", false)
-                $("#loading_gif").remove()  
             }
         });         
     }
 
-    function compare(a,b) {
-      if (a.name < b.name)
-        return -1;
-      else if (a.name > b.name)
-        return 1;
-      else 
-        return 0;
-    }
 
     function syncProducts(orderBotClientId, productClassName, productCategoryName, productSku) {
         var data = {
@@ -146,27 +326,38 @@ $(document).ready(function(){
             type: "POST",
             data: JSON.stringify(data),
             contentType: "application/json",
-            url:  "/api/v1/sync/products",
-            headers: {"Authorization": "Token "+orderBotClientId, "Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            url:  "/orderbotclient/"+orderBotClientId+"/sync/products",
+            headers: {"Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
             beforeSend: function(xhr) {           
-                $("#order_bot_sync_product").attr("disabled", true)
-                $("#order_bot_sync_category").attr("disabled", true)
+                $("#sync_products_order_bot_sync_product").attr("disabled", true)
+                $("#sync_products_order_bot_sync_category").attr("disabled", true)
                 addLoadingGifAfter($("#title"))
 
             },
             error: function(data, textStatus, errorThrown) {
-                alert(data.responseJSON.message);
-                $("#order_bot_sync_product").attr("disabled", false)
-                $("#order_bot_sync_category").attr("disabled", false)
+                alert(data.responseText);
+                $("#sync_products_order_bot_sync_product").attr("disabled", false)
+                $("#sync_products_order_bot_sync_category").attr("disabled", false)
                 $("#loading_gif").remove()  
             },
             success: function(data) { 
-                alert("Success: " + data.message)
-                $("#order_bot_sync_product").attr("disabled", false)
-                $("#order_bot_sync_category").attr("disabled", false)
+                alert("Product(s) successfully synced")
+                $("#sync_products_order_bot_sync_product").attr("disabled", false)
+                $("#sync_products_order_bot_sync_category").attr("disabled", false)
                 $("#loading_gif").remove()  
             }
         });        
+    }
+
+    // COMMON
+
+    function compare(a,b) {
+      if (a.name < b.name)
+        return -1;
+      else if (a.name > b.name)
+        return 1;
+      else 
+        return 0;
     }
 
     function addLoadingGifAfter(element) {

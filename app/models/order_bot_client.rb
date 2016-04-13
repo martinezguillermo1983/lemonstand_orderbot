@@ -142,6 +142,10 @@ class OrderBotClient < ActiveRecord::Base
         httpGet("websites.json/")
     end
 
+    def getSalesChannels
+        httpGet("saleschannels.json/")
+    end
+
     # Syncing
 
     def pushProductStructure

@@ -6,22 +6,23 @@
     <div class="col-md-6 col-md-offset-3">
         <div class="field">
             <label>Orderbot Client</label>
-            <%= select_tag 'order_bot_client', options_for_select(@orderBotClients, 0), :include_blank => true %>
+            <%= select_tag 'sync_products_order_bot_client', options_for_select(@orderBotClients, 0), :include_blank => true %>
         </div>
         <div class="field">
             <label>Product Class</label>
-            <%= select_tag 'order_bot_product_class', options_for_select([], ""), :include_blank => true, disabled: "disabled" %>        
+            <%= select_tag 'sync_products_order_bot_product_class', options_for_select([], ""), :include_blank => true, disabled: "disabled" %>        
         </div>
         <div class="field">
         <label>Product Category</label>
-         <%= select_tag 'order_bot_product_category', options_for_select([], ""), :include_blank => true, disabled: "disabled" %>
-            <%= submit_tag "Load Products", id: "order_bot_load_products" %>     
-            <%= submit_tag "Sync Category", data: { confirm: "Are you sure?" }, id: "order_bot_sync_category" %> 
+         <%= select_tag 'sync_products_order_bot_product_category', options_for_select([], ""), :include_blank => true, disabled: "disabled" %>
+            <%= submit_tag "Load Products", id: "sync_products_order_bot_load_products" %>     
+            <%= submit_tag "Sync Category", data: { confirm: "Are you sure?" }, id: "sync_products_order_bot_sync_category" %> 
         </div>
         <div class="field">
         <label>Products</label>
-            <%= select_tag 'order_bot_products', options_for_select([], ""), :include_blank => true, disabled: "disabled" %>        
-            <%= submit_tag "Sync Product", data: { confirm: "Are you sure?" }, id: "order_bot_sync_product" %>     
+            <%= select_tag 'sync_products_order_bot_products', options_for_select([], ""), :include_blank => true, disabled: "disabled" %>        
+            <%= submit_tag "Sync Product", data: { confirm: "Are you sure?" }, id: "sync_products_order_bot_sync_product" %>     
         </div>
     </div>
 </div>
+<script source="/assets/sync.js"></script>

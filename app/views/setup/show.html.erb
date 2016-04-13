@@ -1,0 +1,38 @@
+<a href="/">home</a>
+<a href="/logout">logout</a>
+<% provide(:title, "Setup") %>
+<h1 id="title">Setup</h1>
+<div class="row">
+    <div class="col-md-6 col-md-offset-3">
+        <div class="field">
+            <label>Orderbot Client</label>
+            <%= select_tag 'setup_order_bot_client', options_for_select(@orderBotClients, 0), :include_blank => true %>
+        </div>
+        <div class="field">
+            <label>LemonStand Client</label>
+            <%= select_tag 'setup_lemon_stand_client', options_for_select([], 0), :disabled => true, :include_blank => true %>
+        </div>
+        <%= hidden_field_tag "clients_link_id", "" %>
+        <div class="field">
+            <label>Sales Channel</label>
+            <%= select_tag 'setup_order_bot_sales_channel', options_for_select([], 0), :disabled => true, :include_blank => true %>
+        </div>
+        <div class="field">
+            <label>Order Guide</label>
+            <%= select_tag 'setup_order_bot_order_guide', options_for_select([], 0), :disabled => true, :include_blank => true %>
+        </div>
+        <div class="field">
+            <label>Account Group</label>
+            <%= select_tag 'setup_order_bot_account_group', options_for_select([], 0), :disabled => true, :include_blank => true %>
+        </div>
+        <div class="field">
+            <label>Distribution Center</label>
+            <%= select_tag 'setup_order_bot_dc', options_for_select([], 0), :disabled => true, :include_blank => true %>
+        </div>
+        <div class="field">
+            <label>Website</label>
+            <%= select_tag 'setup_order_bot_website', options_for_select([], 0), :disabled => true, :include_blank => true %>
+        </div>
+        <%= submit_tag "Save", id: "setup_clients_link_save", :disabled => true %>     
+    </div>
+</div>
