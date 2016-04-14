@@ -15,6 +15,7 @@ Rails.application.routes.draw do
   get 'orderbotclient/:client_code/clientslinks' => 'clients_link#getOrderBotClientsLinks'
   get 'orderbotclient/:client_code/clientslinks/options' => 'clients_link#getOptions'
   put 'clientslinks/:clients_link_id' => 'clients_link#updateClientsLink'
+  post 'lemonstandclient/:client_code/webhooks' => 'clients_link#setWebhooks'
 
   get 'orderbotclient/:client_code/productclasses/'  => 'product#getProductClasses'
   get 'orderbotclient/:client_code/productclasses/:product_class_id/categories/'  => 'product#getProductCategoriesByProductClass'

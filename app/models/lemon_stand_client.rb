@@ -14,6 +14,8 @@ class LemonStandClient < ActiveRecord::Base
         };
     end
 
+    #HTTP Requests
+
     def httpGet(uri, params={})
         fullUrl = self.url + "/api/v2/" + uri;
         if !params.empty?
@@ -72,6 +74,8 @@ class LemonStandClient < ActiveRecord::Base
         response
     end
 
+    # Customers
+
     def getCustomers(params={})
         httpGet("customers", params)
     end
@@ -83,6 +87,8 @@ class LemonStandClient < ActiveRecord::Base
         httpGet("customer/" + customer_id.to_s, params)
     end
 
+    # Orders
+
     def getOrders(params={})
         httpGet("orders", params)
     end
@@ -91,9 +97,17 @@ class LemonStandClient < ActiveRecord::Base
         httpGet("order/" + order_id.to_s, params)
     end
 
-    def getTaxClasses(params={})
-        httpGet("taxclass/", params)
+    # Taxes
+
+    def getTaxClass(taxclass_id, params={})
+        httpGet("taxclass/"+taxclass_id.to_s, params)
     end
+
+    def getTaxClasses(params={})
+        httpGet("taxclass/", params)        
+    end
+
+    # Upcoming...
 
     def getShippingMethods(params={})
         httpGet("shippingmethods/", params)
@@ -102,6 +116,8 @@ class LemonStandClient < ActiveRecord::Base
     def getPaymentMethods(params={})
         httpGet("paymentmethods/", params)
     end  
+
+    # Products
 
     def getCategories(params={})
         httpGet("categories/", params)
@@ -167,9 +183,29 @@ class LemonStandClient < ActiveRecord::Base
         httpPost("producttype/", product_type)    
     end 
 
-    def getTaxClasses(params={})
-        httpGet("taxclasses/", params)        
+    # Webhooks
+
+    def getWebhooks(params={})
+        httpGet("webhooks/", params)                
     end
+
+    def getWebhook(webhook_id, paramas={})
+        httpGet("webhook/"+webhook_id.to_s, params)                
+    end
+
+    def postWebhook(webhook_id, webhook)
+        httpPost("webhook/"+webhook_id.to_s, webhook)                
+    end
+
+    def patchWebhook(webhook_id, webhook)
+        httpPatch("webhook/"+webhook_id.to_s, webhook)                
+    end
+
+    def deleteWebhook(webhook_id)
+        httpDelete("webhook/"+webhook_id.to_s)                
+    end
+
+    #
 
     def self.getByClientCode(client_code)
         self.where(:client_code => client_code).first

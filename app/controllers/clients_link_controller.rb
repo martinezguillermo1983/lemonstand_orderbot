@@ -56,4 +56,13 @@ class ClientsLinkController < ApplicationController
         clientsLink.save
         return render :json => clientsLink, :status => 200
     end
+
+    def setWebhooks
+        lemonStandClient = LemonStandClient.getByClientCode(params[:client_code])
+        if lemonStandClient.nil?
+            raise ActiveRecord::RecordNotFound, "LemonStand client not found"
+        end
+        webhooks = lemonStandClient.getWebhooks
+        return render json: webhooks   
+    end
 end

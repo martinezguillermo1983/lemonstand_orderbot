@@ -37,6 +37,10 @@ $(document).ready(function(){
         loadAccountGroups(orderBotOptions.account_groups)
     })
 
+    $("#setup_clients_link_set_webhooks").click(function(){
+        setWebhooks($("#setup_lemon_stand_client").val())
+    })
+
     $("#setup_clients_link_save").click(function(){
         var clientsLink = {
             order_bot_sales_channel_id: parseInt($("#setup_order_bot_sales_channel").val()),
@@ -70,7 +74,7 @@ $(document).ready(function(){
                 optionsClients.find('option').remove()
                 optionsClients.append($("<option />").val("").text(""))
                 $.each(data.clients_links, function() {
-                    optionsClients.append($("<option />").val(this.lemon_stand_client.id).text(this.lemon_stand_client.company_name));
+                    optionsClients.append($("<option />").val(this.lemon_stand_client.client_code).text(this.lemon_stand_client.company_name));
                 });
                 optionsClients.attr("disabled", false)
             }
@@ -168,7 +172,7 @@ $(document).ready(function(){
 
     function loadClientLink(orderBotClient, orderBotOptions) {
         var optionsClients = $("#setup_lemon_stand_client");
-        clientLink = $.grep(orderBotClient.clients_links, function(c){ return c.lemon_stand_client_id == optionsClients.val(); });
+        clientLink = $.grep(orderBotClient.clients_links, function(c){ return c.lemon_stand_client.client_code == optionsClients.val(); });
         if (clientLink[0] != undefined) {
             clientLink = clientLink[0]
         }
@@ -179,6 +183,7 @@ $(document).ready(function(){
         loadDistributionCenters(orderBotOptions.distribution_centers, clientLink.order_bot_distribution_center_id)
         loadWebsites(orderBotOptions.websites, clientLink.order_bot_website_id)
         $("#setup_clients_link_save").attr("disabled", false)
+        $("#setup_clients_link_set_webhooks").attr("disabled", false)
     }
 
     function updateClientsLink(clientsLinkId, clientsLink) {
@@ -202,6 +207,31 @@ $(document).ready(function(){
                 $("#loading_gif").remove()
                 alert("Clients link succesfully updated.")
                 $("#setup_clients_link_save").attr("disabled", false)
+           }
+        });                
+    }
+
+    function setWebhooks(lemonStandClientCode) {
+        $.ajax({
+            cache: false,
+            type: "POST",
+            // data: JSON.stringify(data),
+            contentType: "application/json",
+            url:  "/lemonstandclient/"+lemonStandClientCode+"/webhooks",
+            headers: {"Pragma": "no-cache", "Cache-Control": "no-cache", "Expires": 0},
+            beforeSend: function(xhr) {
+                addLoadingGifAfter($("#title"))
+                $("#setup_clients_link_set_webhooks").attr("disabled", true)
+            },
+            error: function(data) {
+                $("#loading_gif").remove()
+                alert(data.responseText)
+                $("#setup_clients_link_set_webhooks").attr("disabled", false)
+            },
+            success: function(data) {
+                $("#loading_gif").remove()
+                alert("Webhooks succesfully set.")
+                $("#setup_clients_link_set_webhooks").attr("disabled", false)
            }
         });                
     }
